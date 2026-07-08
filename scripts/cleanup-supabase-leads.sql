@@ -1,0 +1,17 @@
+-- PubLeads cleanup seguro após migrar leads para Turso.
+-- NAO execute este arquivo antes de:
+-- 1. rodar npm run turso:migrate
+-- 2. rodar npm run turso:verify sem divergencias
+-- 3. validar a aplicacao em producao usando Turso
+--
+-- Opcao A: esvaziar tabelas mantendo schema antigo para rollback manual.
+-- truncate table public.lead_messages cascade;
+-- truncate table public.lead_notes cascade;
+-- truncate table public.search_logs cascade;
+-- truncate table public.leads cascade;
+--
+-- Opcao B: remover tabelas antigas de leads do Supabase.
+-- drop table if exists public.lead_messages cascade;
+-- drop table if exists public.lead_notes cascade;
+-- drop table if exists public.search_logs cascade;
+-- drop table if exists public.leads cascade;
