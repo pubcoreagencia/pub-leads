@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { createMessage } from "@/src/lib/turso/lead-messages-repository";
 import { getLeadById } from "@/src/lib/turso/leads-repository";
-import { diversifyBaseCopy } from "@/src/lib/whatsapp/diversify-copy";
+import { diversifyBaseCopyWithReport } from "@/src/lib/whatsapp/copy-diversifier";
 import { manualWhatsAppProvider } from "@/src/lib/whatsapp/provider";
 
 const diversifyMessageSchema = z.object({
@@ -48,13 +48,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lead nao encontrado." }, { status: 404 });
   }
 
-  const message = diversifyBaseCopy({
+  const diversification = diversifyBaseCopyWithReport({
     baseCopy,
     city,
     lead,
     niche,
     variantSeed,
   });
+  const message = diversification.message;
   const phone = lead.whatsapp || lead.phone || "";
   const waLink = phone
     ? manualWhatsAppProvider.createMessageLink({ phone, message })
@@ -64,16 +65,20 @@ export async function POST(request: Request) {
     message,
     objective: JSON.stringify({
       city,
+      diversificationScore: diversification.diversificationScore,
       diversified: true,
       niche,
       source: "base_copy_diversification",
+      transformationsApplied: diversification.transformationsApplied,
     }),
     tone: "base_copy_diversification",
   });
 
   return NextResponse.json({
+    diversificationScore: diversification.diversificationScore,
     message,
     savedMessage,
+    transformationsApplied: diversification.transformationsApplied,
     waLink,
   });
 }
