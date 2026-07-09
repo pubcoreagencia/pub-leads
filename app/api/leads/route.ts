@@ -16,6 +16,7 @@ const listSchema = z.object({
   qualification: z
     .enum(["all", "with_whatsapp", "without_whatsapp", "with_instagram", "without_instagram"])
     .optional(),
+  site: z.enum(["all", "with_site", "without_site"]).optional(),
   source: z.union([leadSourceSchema, z.literal("all")]).optional(),
   status: z.union([leadStatusSchema, z.literal("all")]).optional(),
 });
@@ -91,6 +92,7 @@ export async function GET(request: Request) {
     name: parsed.data.name || undefined,
     onlyWithPhone: parsed.data.onlyWithPhone === "true",
     qualification: parsed.data.qualification,
+    site: parsed.data.site,
     source: parsed.data.source,
     status: parsed.data.status,
   });

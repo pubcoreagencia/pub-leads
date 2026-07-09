@@ -1,7 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, PhoneCall, Plus, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
+import {
+  Globe2,
+  Instagram,
+  Loader2,
+  Mail,
+  MessageCircle,
+  PhoneCall,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 
 import { LeadDetailModal } from "@/components/leads/lead-detail-modal";
 import { Button } from "@/components/ui/button";
@@ -17,6 +29,7 @@ import {
   getLeadQualification,
   type LeadQualification,
 } from "@/src/lib/lead-qualification/qualifier";
+import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 
 type FilterState = {
   name: string;
@@ -26,6 +39,7 @@ type FilterState = {
   source: LeadSource | "all";
   onlyWithPhone: boolean;
   qualification: NonNullable<LeadFilters["qualification"]>;
+  site: NonNullable<LeadFilters["site"]>;
 };
 
 const initialFilters: FilterState = {
@@ -36,6 +50,7 @@ const initialFilters: FilterState = {
   source: "all",
   onlyWithPhone: false,
   qualification: "all",
+  site: "all",
 };
 
 function toLeadFilters(filters: FilterState): LeadFilters {
@@ -45,6 +60,7 @@ function toLeadFilters(filters: FilterState): LeadFilters {
     category: filters.category.trim() || undefined,
     onlyWithPhone: filters.onlyWithPhone,
     qualification: filters.qualification,
+    site: filters.site,
     status: filters.status,
     source: filters.source,
   };
@@ -52,6 +68,32 @@ function toLeadFilters(filters: FilterState): LeadFilters {
 
 function hasContactPhone(lead: Lead) {
   return Boolean(lead.phone || lead.phone_2 || lead.whatsapp);
+}
+
+function getContactPhone(lead: Lead) {
+  return lead.whatsapp ?? lead.phone ?? lead.phone_2;
+}
+
+function getWebsiteHref(website: string | null) {
+  if (!website) {
+    return null;
+  }
+
+  return website.startsWith("http") ? website : `https://${website}`;
+}
+
+function getWhatsAppHref(lead: Lead) {
+  const phone = getContactPhone(lead);
+
+  if (!phone) {
+    return null;
+  }
+
+  try {
+    return createWaLink({ phone, message: "" });
+  } catch {
+    return null;
+  }
 }
 
 function formatDate(value: string) {
@@ -289,7 +331,7 @@ export function LeadsPageContent() {
             <SlidersHorizontal className="h-4 w-4 text-purple-600" />
             Filtros
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
             <div className="grid gap-2">
               <Label htmlFor="filter-name">Nome</Label>
               <Input
@@ -381,6 +423,24 @@ export function LeadsPageContent() {
                 <option value="without_instagram">Sem Instagram</option>
               </select>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="filter-site">Site</Label>
+              <select
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                id="filter-site"
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    site: event.target.value as FilterState["site"],
+                  }))
+                }
+                value={filters.site}
+              >
+                <option value="all">Todos</option>
+                <option value="with_site">Com site</option>
+                <option value="without_site">Sem site</option>
+              </select>
+            </div>
             <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
               <input
                 checked={filters.onlyWithPhone}
@@ -440,7 +500,117 @@ export function LeadsPageContent() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div className="grid gap-3 p-4 md:hidden">
+              <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                <input
+                  aria-label="Selecionar todos os leads visiveis"
+                  checked={allVisibleSelected}
+                  className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  onChange={(event) => toggleAllVisible(event.target.checked)}
+                  type="checkbox"
+                />
+                Selecionar todos visiveis
+              </label>
+              {leads.map((lead) => {
+                const qualification = getLeadQualification(lead);
+                const whatsapp = whatsappBadge(qualification);
+                const instagram = instagramBadge(qualification);
+                const whatsappHref = getWhatsAppHref(lead);
+                const websiteHref = getWebsiteHref(lead.website);
+
+                return (
+                  <article className="rounded-lg border border-slate-200 bg-white p-4" key={lead.id}>
+                    <div className="flex items-start gap-3">
+                      <input
+                        aria-label={`Selecionar ${lead.name}`}
+                        checked={selectedLeadIds.has(lead.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        onChange={(event) => toggleLeadSelection(lead.id, event.target.checked)}
+                        type="checkbox"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <button
+                          className="text-left text-base font-semibold text-slate-950 hover:text-purple-700"
+                          onClick={() => openLeadModal(lead)}
+                          type="button"
+                        >
+                          {lead.name}
+                        </button>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {[lead.category, lead.city, lead.state].filter(Boolean).join(" · ") || "Sem detalhes"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${whatsapp.className}`}>
+                        {whatsapp.label}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${instagram.className}`}>
+                        {instagram.label}
+                      </span>
+                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+                        {leadStatusLabels[lead.status]}
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                        {leadSourceLabels[lead.source]}
+                      </span>
+                    </div>
+
+                    {qualification.instagram_status === "found" && qualification.whatsapp_status === "missing" ? (
+                      <p className="mt-2 text-xs font-medium text-pink-700">Lead com Instagram</p>
+                    ) : null}
+
+                    <div className="mt-3 grid gap-1.5 text-sm text-slate-600">
+                      {getContactPhone(lead) ? <p>Telefone: {getContactPhone(lead)}</p> : null}
+                      {lead.email ? <p>Email: {lead.email}</p> : null}
+                      {lead.website ? <p>Site: {lead.website}</p> : <p className="text-slate-400">Sem site</p>}
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {whatsappHref ? (
+                        <a
+                          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                          href={whatsappHref}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp
+                        </a>
+                      ) : null}
+                      {qualification.instagram_url ? (
+                        <a
+                          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-pink-200 px-3 text-xs font-semibold text-pink-700 transition hover:bg-pink-50"
+                          href={qualification.instagram_url}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <Instagram className="h-3.5 w-3.5" />
+                          Instagram
+                        </a>
+                      ) : null}
+                      {websiteHref ? (
+                        <a
+                          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                          href={websiteHref}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          <Globe2 className="h-3.5 w-3.5" />
+                          Site
+                        </a>
+                      ) : null}
+                      <Button onClick={() => openLeadModal(lead)} size="sm" type="button" variant="outline">
+                        Detalhes
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[880px] border-collapse text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
@@ -467,6 +637,8 @@ export function LeadsPageContent() {
                     const qualification = getLeadQualification(lead);
                     const whatsapp = whatsappBadge(qualification);
                     const instagram = instagramBadge(qualification);
+                    const whatsappHref = getWhatsAppHref(lead);
+                    const websiteHref = getWebsiteHref(lead.website);
 
                     return (
                     <tr className="transition hover:bg-purple-50/50" key={lead.id}>
@@ -480,12 +652,14 @@ export function LeadsPageContent() {
                         />
                       </td>
                       <td className="px-5 py-4">
-                        <button
-                          className="text-left"
-                          onClick={() => openLeadModal(lead)}
-                          type="button"
-                        >
-                          <span className="block font-medium text-slate-950">{lead.name}</span>
+                        <div className="text-left">
+                          <button
+                            className="block text-left font-medium text-slate-950 hover:text-purple-700"
+                            onClick={() => openLeadModal(lead)}
+                            type="button"
+                          >
+                            {lead.name}
+                          </button>
                           <span className="block text-xs text-slate-500">
                             {lead.company || lead.email || lead.phone || "Sem contato"}
                           </span>
@@ -506,7 +680,55 @@ export function LeadsPageContent() {
                               Lead com Instagram
                             </span>
                           ) : null}
-                        </button>
+                          <span className="mt-2 flex flex-wrap gap-1.5">
+                            {whatsappHref ? (
+                              <a
+                                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700"
+                                href={whatsappHref}
+                                rel="noreferrer"
+                                target="_blank"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <MessageCircle className="h-3 w-3" />
+                                WhatsApp
+                              </a>
+                            ) : null}
+                            {qualification.instagram_url ? (
+                              <a
+                                className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-2 py-0.5 text-xs font-medium text-pink-700"
+                                href={qualification.instagram_url}
+                                rel="noreferrer"
+                                target="_blank"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Instagram className="h-3 w-3" />
+                                {qualification.instagram_handle ? `@${qualification.instagram_handle}` : "Instagram"}
+                              </a>
+                            ) : null}
+                            {websiteHref ? (
+                              <a
+                                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                                href={websiteHref}
+                                rel="noreferrer"
+                                target="_blank"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Globe2 className="h-3 w-3" />
+                                Site
+                              </a>
+                            ) : null}
+                            {lead.email ? (
+                              <a
+                                className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700"
+                                href={`mailto:${lead.email}`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Mail className="h-3 w-3" />
+                                Email
+                              </a>
+                            ) : null}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-5 py-4 text-slate-600">{lead.city || "-"}</td>
                       <td className="px-5 py-4 text-slate-600">{lead.category || "-"}</td>
@@ -545,6 +767,7 @@ export function LeadsPageContent() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

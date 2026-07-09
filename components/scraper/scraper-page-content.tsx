@@ -7,7 +7,9 @@ import {
   ExternalLink,
   Instagram,
   Loader2,
+  Mail,
   MapPin,
+  MessageCircle,
   Phone,
   Save,
   Search,
@@ -25,9 +27,18 @@ import {
   type LeadQualification,
 } from "@/src/lib/lead-qualification/qualifier";
 import type { ExternalLead, NormalizedLead } from "@/src/lib/lead-sources/types";
+import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 
 type LeadSearchSource = "site_sales" | "openstreetmap" | "cnpj_brasil" | "google_places";
-type QualificationFilter = "all" | "possible_whatsapp" | "missing_whatsapp" | "with_instagram";
+type QualificationFilter =
+  | "all"
+  | "possible_whatsapp"
+  | "missing_whatsapp"
+  | "with_instagram"
+  | "missing_instagram"
+  | "with_site"
+  | "without_site"
+  | "best";
 
 type SearchResultLead = (ExternalLead | NormalizedLead) & {
   qualification?: LeadQualification;
@@ -80,9 +91,13 @@ const sourceHints: Record<LeadSearchSource, string> = {
 
 const qualificationFilterLabels: Record<QualificationFilter, string> = {
   all: "Todos",
+  best: "Melhores qualificados",
   missing_whatsapp: "Sem WhatsApp",
+  missing_instagram: "Sem Instagram",
   possible_whatsapp: "Com possivel WhatsApp",
   with_instagram: "Com Instagram",
+  with_site: "Com site",
+  without_site: "Sem site",
 };
 
 function getLeadIdentifier(lead: SearchResultLead) {
@@ -156,6 +171,24 @@ async function parseJsonResponse<T>(response: Response) {
   return payload;
 }
 
+function getContactPhone(lead: SearchResultLead) {
+  return lead.phone ?? lead.phone2 ?? null;
+}
+
+function getWhatsAppHref(lead: SearchResultLead) {
+  const phone = getContactPhone(lead);
+
+  if (!phone) {
+    return null;
+  }
+
+  try {
+    return createWaLink({ phone, message: "" });
+  } catch {
+    return null;
+  }
+}
+
 export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentProps) {
   const [form, setForm] = useState<SearchFormState>(initialForm);
   const [results, setResults] = useState<SearchResultLead[]>([]);
@@ -167,7 +200,6 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
 
-  const unsavedResults = useMemo(() => results.filter((lead) => !lead.saved), [results]);
   const visibleResults = useMemo(
     () =>
       results.filter((lead) => {
@@ -185,9 +217,34 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
           return qualification.instagram_status === "found";
         }
 
+        if (qualificationFilter === "missing_instagram") {
+          return qualification.instagram_status === "missing";
+        }
+
+        if (qualificationFilter === "with_site") {
+          return Boolean(lead.website);
+        }
+
+        if (qualificationFilter === "without_site") {
+          return !lead.website;
+        }
+
+        if (qualificationFilter === "best") {
+          return (
+            qualification.qualification_score >= 35 ||
+            qualification.instagram_status === "found" ||
+            qualification.whatsapp_status === "confirmed" ||
+            qualification.whatsapp_status === "possible"
+          );
+        }
+
         return true;
       }),
     [qualificationFilter, results],
+  );
+  const unsavedVisibleResults = useMemo(
+    () => visibleResults.filter((lead) => !lead.saved),
+    [visibleResults],
   );
 
   function updateField<K extends keyof SearchFormState>(field: K, value: SearchFormState[K]) {
@@ -329,17 +386,20 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     return data;
   }
 
-  async function handleQualifyInstagram() {
+  async function handleQualifyContacts() {
     const leadsToQualify = results.filter((lead) => {
       const qualification = getLeadQualification(lead);
 
-      return qualification.instagram_status !== "found" && Boolean(lead.website);
+      return (
+        Boolean(lead.website) &&
+        (qualification.instagram_status !== "found" || qualification.whatsapp_status !== "confirmed")
+      );
     });
 
     if (leadsToQualify.length === 0) {
       toast({
         title: "Nada para qualificar",
-        description: "Nenhum lead com site disponivel para buscar Instagram.",
+        description: "Nenhum lead com site disponivel para buscar contatos publicos.",
         variant: "error",
       });
       return;
@@ -349,7 +409,15 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     setQualificationProgress(`Qualificando 0/${leadsToQualify.length}`);
 
     try {
-      const updates = new Map<string, { qualification: LeadQualification; rawData: Record<string, unknown> }>();
+      const updates = new Map<
+        string,
+        {
+          email: string | null;
+          phone: string | null;
+          qualification: LeadQualification;
+          rawData: Record<string, unknown>;
+        }
+      >();
 
       for (let index = 0; index < leadsToQualify.length; index += 25) {
         const chunk = leadsToQualify.slice(index, index + 25);
@@ -373,7 +441,9 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
         }).then((response) =>
           parseJsonResponse<{
             results: Array<{
+              email: string | null;
               id: string;
+              phone: string | null;
               qualification: LeadQualification;
               rawData: Record<string, unknown>;
             }>;
@@ -382,6 +452,8 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
 
         payload.results.forEach((result) => {
           updates.set(result.id, {
+            email: result.email,
+            phone: result.phone,
             qualification: result.qualification,
             rawData: result.rawData,
           });
@@ -395,17 +467,25 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
         current.map((lead) => {
           const update = updates.get(getLeadIdentifier(lead));
 
-          return update ? { ...lead, ...update } : lead;
+          return update
+            ? {
+                ...lead,
+                email: lead.email ?? update.email,
+                phone: lead.phone ?? update.phone,
+                qualification: update.qualification,
+                rawData: update.rawData,
+              }
+            : lead;
         }),
       );
       toast({
         title: "Qualificacao concluida",
-        description: "Busca publica por Instagram finalizada para os leads com site.",
+        description: "Busca publica por Instagram, WhatsApp, telefone e email finalizada.",
         variant: "success",
       });
     } catch (error) {
       toast({
-        title: "Erro ao qualificar Instagram",
+        title: "Erro ao qualificar contatos",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
@@ -438,14 +518,14 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
   }
 
   async function handleSaveAll() {
-    if (unsavedResults.length === 0) {
+    if (unsavedVisibleResults.length === 0) {
       return;
     }
 
     setIsSavingAll(true);
 
     try {
-      const data = await saveLeads(unsavedResults);
+      const data = await saveLeads(unsavedVisibleResults);
       toast({
         title: "Leads salvos",
         description: `${data.savedExternalIds.length} novos leads salvos. ${data.skippedExternalIds.length} duplicados ignorados.`,
@@ -476,9 +556,13 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
             Encontre empresas com telefone e sem site conhecido usando CNPJ Brasil e OpenStreetMap.
           </p>
         </div>
-        <Button disabled={unsavedResults.length === 0 || isSavingAll} onClick={handleSaveAll} type="button">
+        <Button
+          disabled={unsavedVisibleResults.length === 0 || isSavingAll}
+          onClick={handleSaveAll}
+          type="button"
+        >
           {isSavingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          Salvar todos
+          {qualificationFilter === "all" ? "Salvar todos" : "Salvar filtrados"}
         </Button>
       </div>
 
@@ -686,7 +770,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
               ) : null}
               <Button
                 disabled={isQualifyingInstagram}
-                onClick={handleQualifyInstagram}
+                onClick={handleQualifyContacts}
                 type="button"
                 variant="outline"
               >
@@ -695,7 +779,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                 ) : (
                   <Instagram className="h-4 w-4" />
                 )}
-                Buscar Instagram dos leads
+                Qualificar contatos
               </Button>
             </div>
           </CardContent>
@@ -713,6 +797,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
             const qualification = getLeadQualification(lead);
             const whatsapp = whatsappBadge(qualification);
             const instagram = instagramBadge(qualification);
+            const whatsappHref = getWhatsAppHref(lead);
 
             return (
             <Card className="border-slate-200 bg-white shadow-sm" key={getLeadIdentifier(lead)}>
@@ -749,12 +834,16 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                       </span>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">{lead.category}</p>
-                    {qualification.instagram_status === "found" ? (
-                      <p className="mt-1 text-xs font-medium text-pink-700">
-                        Lead com Instagram
-                        {qualification.instagram_handle ? `: @${qualification.instagram_handle}` : ""}
-                      </p>
-                    ) : null}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {qualification.qualification_tags.map((tag) => (
+                        <span
+                          className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
+                          key={tag}
+                        >
+                          {tag.replaceAll("_", " ")}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                   <Button
                     disabled={lead.saved || savingIds.has(getLeadIdentifier(lead))}
@@ -783,10 +872,20 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                   </div>
                   <div className="flex items-center gap-2 text-slate-500">
                     <Phone className="h-4 w-4 text-purple-600" />
-                    <span>Telefone: {lead.phone ?? "nao disponivel"}</span>
+                    <span>Telefone: {getContactPhone(lead) ?? "nao disponivel"}</span>
                   </div>
                   {lead.phone2 ? <p>Telefone 2: {lead.phone2}</p> : null}
-                  {lead.email ? <p>Email: {lead.email}</p> : null}
+                  {lead.email ? (
+                    <a
+                      className="inline-flex w-fit items-center gap-1 font-medium text-purple-700 hover:text-purple-800"
+                      href={`mailto:${lead.email}`}
+                    >
+                      <Mail className="h-4 w-4" />
+                      {lead.email}
+                    </a>
+                  ) : (
+                    <p className="text-slate-400">Email nao disponivel</p>
+                  )}
                   {lead.cnpj ? <p>CNPJ: {lead.cnpj}</p> : null}
                   {lead.cnae ? (
                     <div className="flex items-start gap-2 text-slate-500">
@@ -794,7 +893,49 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                       <span>CNAE: {lead.cnaeDescription ?? lead.cnae}</span>
                     </div>
                   ) : null}
-                  <p>Site: {lead.website ?? "nao disponivel"}</p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {whatsappHref ? (
+                      <a
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-emerald-200 px-3 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+                        href={whatsappHref}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Abrir WhatsApp
+                      </a>
+                    ) : null}
+                    {qualification.instagram_url ? (
+                      <a
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-pink-200 px-3 text-xs font-semibold text-pink-700 transition hover:bg-pink-50"
+                        href={qualification.instagram_url}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        <Instagram className="h-3.5 w-3.5" />
+                        {qualification.instagram_handle ? `@${qualification.instagram_handle}` : "Instagram"}
+                      </a>
+                    ) : (
+                      <span className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-500">
+                        Sem Instagram
+                      </span>
+                    )}
+                    {lead.website ? (
+                      <a
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                        href={lead.website.startsWith("http") ? lead.website : `https://${lead.website}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Site
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    ) : (
+                      <span className="inline-flex h-9 items-center rounded-md border border-slate-200 px-3 text-xs font-medium text-slate-500">
+                        Sem site
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-400">
                     {getCoordinateLabel(lead) ? `${getCoordinateLabel(lead)} - ` : ""}
                     {sourceLabels[lead.source]}

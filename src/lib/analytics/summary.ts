@@ -1,4 +1,5 @@
 import type { Lead, LeadSource, LeadStatus } from "@/schemas/lead";
+import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
 import { countMessages } from "@/src/lib/turso/lead-messages-repository";
 import { listLeads } from "@/src/lib/turso/leads-repository";
 import { listRecentSearches } from "@/src/lib/turso/search-logs-repository";
@@ -27,6 +28,13 @@ export type AnalyticsSummary = {
   };
   conversionRate: number;
   usage: UsageSummary;
+  qualification: {
+    missingWhatsapp: number;
+    possibleWhatsapp: number;
+    qualificationRate: number;
+    withInstagram: number;
+    withSite: number;
+  };
   pipeline: ChartPoint[];
   sources: ChartPoint[];
   categories: ChartPoint[];
@@ -133,8 +141,25 @@ export async function getAnalyticsSummary(
   ]);
   const statusCounts = countBy(leads.map((lead) => lead.status));
   const sourceCounts = countBy(leads.map((lead) => lead.source));
+  const qualifications = leads.map((lead) => getLeadQualification(lead));
   const won = statusCounts.won ?? 0;
   const conversionRate = leads.length > 0 ? Math.round((won / leads.length) * 100) : 0;
+  const possibleWhatsapp = qualifications.filter((qualification) =>
+    ["confirmed", "possible"].includes(qualification.whatsapp_status),
+  ).length;
+  const missingWhatsapp = qualifications.filter((qualification) =>
+    ["missing", "invalid"].includes(qualification.whatsapp_status),
+  ).length;
+  const withInstagram = qualifications.filter(
+    (qualification) => qualification.instagram_status === "found",
+  ).length;
+  const withSite = leads.filter((lead) => Boolean(lead.website)).length;
+  const qualified = qualifications.filter(
+    (qualification) =>
+      qualification.instagram_status === "found" ||
+      qualification.whatsapp_status === "confirmed" ||
+      qualification.whatsapp_status === "possible",
+  ).length;
 
   return {
     categories: topCategories(leads),
@@ -144,6 +169,13 @@ export async function getAnalyticsSummary(
       label: statusLabels[status],
       value: statusCounts[status] ?? 0,
     })),
+    qualification: {
+      missingWhatsapp,
+      possibleWhatsapp,
+      qualificationRate: leads.length > 0 ? Math.round((qualified / leads.length) * 100) : 0,
+      withInstagram,
+      withSite,
+    },
     recentLeads: leads.slice(0, 6).map((lead) => ({
       category: lead.category,
       city: lead.city,

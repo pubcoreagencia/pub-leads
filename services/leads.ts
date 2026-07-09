@@ -27,6 +27,7 @@ export async function fetchLeads(filters: LeadFilters = {}) {
   appendFilter(params, "source", filters.source);
   appendFilter(params, "onlyWithPhone", filters.onlyWithPhone ? true : undefined);
   appendFilter(params, "qualification", filters.qualification);
+  appendFilter(params, "site", filters.site);
 
   const query = params.toString();
   const payload = await fetch(`/api/leads${query ? `?${query}` : ""}`, {

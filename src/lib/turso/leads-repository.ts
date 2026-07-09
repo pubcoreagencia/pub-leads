@@ -292,6 +292,14 @@ export async function listLeads(userId: string, filters: LeadListFilters = {}) {
     clauses.push("raw_data like '%instagram_status%missing%'");
   }
 
+  if (filters.site === "with_site") {
+    clauses.push("website is not null and website != ''");
+  }
+
+  if (filters.site === "without_site") {
+    clauses.push("(website is null or website = '')");
+  }
+
   args.push(getLimit(filters.limit));
 
   const result = await getTursoClient().execute({

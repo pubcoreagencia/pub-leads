@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { discoverInstagramFromWebsite } from "@/src/lib/lead-qualification/instagram-discovery";
+import { discoverContactsFromWebsite } from "@/src/lib/lead-qualification/contact-enrichment";
 import {
   buildQualificationTags,
+  calculateQualificationScore,
   mergeQualificationIntoRawData,
   qualifyLeadAfterScraping,
   type LeadQualification,
@@ -67,28 +68,48 @@ export async function POST(request: Request) {
 
   const results = await mapWithConcurrency(parsed.data.leads, 3, async (lead) => {
     const base = qualifyLeadAfterScraping(lead).qualification;
-    const instagram = await discoverInstagramFromWebsite(lead.website);
-    const qualification: LeadQualification = {
+    const contact = await discoverContactsFromWebsite(lead.website);
+    const instagramFound =
+      contact.instagram_status === "found" ||
+      (base.instagram_status === "found" && Boolean(base.instagram_url || base.instagram_handle));
+    const instagramStatus = instagramFound
+      ? "found"
+      : contact.instagram_status === "unknown"
+        ? base.instagram_status
+        : contact.instagram_status;
+    const whatsappStatus = contact.whatsapp_status === "confirmed" ? "confirmed" : base.whatsapp_status;
+    const qualificationWithoutScore = {
       ...base,
-      instagram_checked_at: instagram.instagram_checked_at,
-      instagram_handle: instagram.instagram_handle,
-      instagram_status: instagram.instagram_status,
-      instagram_url: instagram.instagram_url,
+      instagram_checked_at: contact.instagram_checked_at ?? base.instagram_checked_at,
+      instagram_handle: contact.instagram_handle ?? base.instagram_handle,
+      instagram_status: instagramStatus,
+      instagram_url: contact.instagram_url ?? base.instagram_url,
       qualification_tags: buildQualificationTags({
-        instagram_status: instagram.instagram_status,
-        whatsapp_status: base.whatsapp_status,
+        instagram_status: instagramStatus,
+        whatsapp_status: whatsappStatus,
       }),
+      whatsapp_checked_at:
+        contact.whatsapp_status === "confirmed" ? contact.whatsapp_checked_at : base.whatsapp_checked_at,
+      whatsapp_status: whatsappStatus,
+    } satisfies Omit<LeadQualification, "qualification_score">;
+    const qualification: LeadQualification = {
+      ...qualificationWithoutScore,
+      qualification_score: calculateQualificationScore(qualificationWithoutScore),
     };
-    qualification.qualification_score =
-      (qualification.whatsapp_status === "confirmed"
-        ? 50
-        : qualification.whatsapp_status === "possible"
-          ? 35
-          : 0) + (qualification.instagram_status === "found" ? 25 : 0);
-    const rawData = mergeQualificationIntoRawData(lead.rawData ?? lead.raw ?? {}, qualification);
+    const rawData = mergeQualificationIntoRawData(
+      {
+        ...(lead.rawData ?? lead.raw ?? {}),
+        contact_enrichment: contact,
+        enrichment_checked_at: contact.enrichment_checked_at,
+        enrichment_source: contact.enrichment_source,
+      },
+      qualification,
+    );
 
     return {
+      email: contact.email,
       id: lead.id,
+      phone: contact.phone,
       qualification,
       rawData,
     };

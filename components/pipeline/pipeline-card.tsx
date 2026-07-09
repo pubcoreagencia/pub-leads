@@ -2,9 +2,10 @@
 
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, MapPin } from "lucide-react";
+import { Globe2, GripVertical, Instagram, MapPin, MessageCircle } from "lucide-react";
 
 import { leadSourceLabels } from "@/config/pipeline";
+import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/schemas/lead";
 
@@ -13,6 +14,7 @@ type PipelineCardProps = {
 };
 
 export function PipelineCard({ lead }: PipelineCardProps) {
+  const qualification = getLeadQualification(lead);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: {
@@ -63,6 +65,42 @@ export function PipelineCard({ lead }: PipelineCardProps) {
             {leadSourceLabels[lead.source]}
           </span>
           {lead.category ? <span className="truncate">{lead.category}</span> : null}
+        </div>
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium",
+              qualification.whatsapp_status === "confirmed"
+                ? "bg-emerald-50 text-emerald-700"
+                : qualification.whatsapp_status === "possible"
+                  ? "bg-blue-50 text-blue-700"
+                  : "bg-slate-100 text-slate-600",
+            )}
+          >
+            <MessageCircle className="h-3 w-3" />
+            {qualification.whatsapp_status === "confirmed"
+              ? "WhatsApp"
+              : qualification.whatsapp_status === "possible"
+                ? "Possivel WhatsApp"
+                : "Sem WhatsApp"}
+          </span>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium",
+              qualification.instagram_status === "found"
+                ? "bg-pink-50 text-pink-700"
+                : "bg-slate-100 text-slate-600",
+            )}
+          >
+            <Instagram className="h-3 w-3" />
+            {qualification.instagram_status === "found" ? "Instagram" : "Sem Instagram"}
+          </span>
+          {lead.website ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-600">
+              <Globe2 className="h-3 w-3" />
+              Site
+            </span>
+          ) : null}
         </div>
       </div>
     </article>

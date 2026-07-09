@@ -244,7 +244,7 @@ export function qualifyInstagram({
   };
 }
 
-function scoreQualification(qualification: Omit<LeadQualification, "qualification_score">) {
+export function calculateQualificationScore(qualification: Omit<LeadQualification, "qualification_score">) {
   let score = 0;
 
   if (qualification.whatsapp_status === "confirmed") {
@@ -334,7 +334,7 @@ export function qualifyLeadAfterScraping<T extends QualifiableLead>(lead: T) {
   } satisfies Omit<LeadQualification, "qualification_score">;
   const qualification: LeadQualification = {
     ...qualificationWithoutScore,
-    qualification_score: scoreQualification(qualificationWithoutScore),
+    qualification_score: calculateQualificationScore(qualificationWithoutScore),
   };
   const rawData = mergeQualificationIntoRawData(metadata, qualification);
 
