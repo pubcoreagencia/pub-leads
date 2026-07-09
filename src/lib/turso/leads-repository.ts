@@ -272,6 +272,26 @@ export async function listLeads(userId: string, filters: LeadListFilters = {}) {
     clauses.push("(phone is not null or phone_2 is not null)");
   }
 
+  if (filters.qualification === "with_whatsapp") {
+    clauses.push(
+      "(raw_data like '%whatsapp_status%confirmed%' or raw_data like '%whatsapp_status%possible%')",
+    );
+  }
+
+  if (filters.qualification === "without_whatsapp") {
+    clauses.push(
+      "(raw_data like '%whatsapp_status%missing%' or raw_data like '%whatsapp_status%invalid%')",
+    );
+  }
+
+  if (filters.qualification === "with_instagram") {
+    clauses.push("raw_data like '%instagram_status%found%'");
+  }
+
+  if (filters.qualification === "without_instagram") {
+    clauses.push("raw_data like '%instagram_status%missing%'");
+  }
+
   args.push(getLimit(filters.limit));
 
   const result = await getTursoClient().execute({

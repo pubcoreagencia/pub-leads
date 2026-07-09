@@ -13,6 +13,9 @@ const listSchema = z.object({
   city: z.string().trim().optional(),
   name: z.string().trim().optional(),
   onlyWithPhone: z.enum(["true", "false"]).optional(),
+  qualification: z
+    .enum(["all", "with_whatsapp", "without_whatsapp", "with_instagram", "without_instagram"])
+    .optional(),
   source: z.union([leadSourceSchema, z.literal("all")]).optional(),
   status: z.union([leadStatusSchema, z.literal("all")]).optional(),
 });
@@ -87,6 +90,7 @@ export async function GET(request: Request) {
     city: parsed.data.city || undefined,
     name: parsed.data.name || undefined,
     onlyWithPhone: parsed.data.onlyWithPhone === "true",
+    qualification: parsed.data.qualification,
     source: parsed.data.source,
     status: parsed.data.status,
   });

@@ -2,12 +2,28 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  qualifyLeadAfterScraping,
+  type LeadQualification,
+} from "@/src/lib/lead-qualification/qualifier";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { createManyLeads, findDuplicateLead } from "@/src/lib/turso/leads-repository";
 import type { LeadWriteInput } from "@/src/lib/turso/types";
 import { getUsageSummary } from "@/src/lib/usage/limits";
 
 const nullableStringSchema = z.string().nullable().optional();
+const qualificationSchema = z
+  .object({
+    instagram_checked_at: nullableStringSchema,
+    instagram_handle: nullableStringSchema,
+    instagram_status: z.enum(["found", "missing", "unknown"]),
+    instagram_url: nullableStringSchema,
+    qualification_score: z.number().int().nullable().optional(),
+    qualification_tags: z.array(z.string()).optional(),
+    whatsapp_checked_at: z.string().optional(),
+    whatsapp_status: z.enum(["confirmed", "possible", "missing", "invalid", "unknown"]),
+  })
+  .passthrough();
 
 const externalLeadSchema = z
   .object({
@@ -27,6 +43,7 @@ const externalLeadSchema = z
     name: z.string().min(1),
     phone: nullableStringSchema,
     phone2: nullableStringSchema,
+    qualification: qualificationSchema.optional(),
     rating: z.number().nullable().optional(),
     raw: z.record(z.string(), z.unknown()).optional(),
     rawData: z.record(z.string(), z.unknown()).optional(),
@@ -57,6 +74,13 @@ function getLeadKey(lead: SaveLeadInput) {
 
 function toLeadInput(lead: SaveLeadInput): LeadWriteInput {
   const rawData = lead.rawData ?? lead.raw ?? {};
+  const rawDataWithFrontendQualification = lead.qualification
+    ? { ...rawData, qualification: lead.qualification as LeadQualification }
+    : rawData;
+  const qualifiedLead = qualifyLeadAfterScraping({
+    ...lead,
+    rawData: rawDataWithFrontendQualification,
+  });
 
   return {
     address: lead.address ?? null,
@@ -76,8 +100,8 @@ function toLeadInput(lead: SaveLeadInput): LeadWriteInput {
     phone: lead.phone ?? null,
     phone_2: lead.phone2 ?? null,
     rating: lead.rating ?? null,
-    raw_cnpj_data: lead.source === "cnpj_brasil" ? rawData : null,
-    raw_data: rawData,
+    raw_cnpj_data: lead.source === "cnpj_brasil" ? qualifiedLead.rawData : null,
+    raw_data: qualifiedLead.rawData,
     reviews_count: lead.reviewsCount ?? null,
     source: lead.source,
     source_place_id: getExternalId(lead),

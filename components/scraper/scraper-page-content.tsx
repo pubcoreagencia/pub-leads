@@ -1,7 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Building2, Check, ExternalLink, Loader2, MapPin, Phone, Save, Search } from "lucide-react";
+import {
+  Building2,
+  Check,
+  ExternalLink,
+  Instagram,
+  Loader2,
+  MapPin,
+  Phone,
+  Save,
+  Search,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +19,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { leadCategories, type LeadCategoryId } from "@/config/lead-categories";
 import { toast } from "@/hooks/use-toast";
+import {
+  getLeadQualification,
+  qualifyLeadAfterScraping,
+  type LeadQualification,
+} from "@/src/lib/lead-qualification/qualifier";
 import type { ExternalLead, NormalizedLead } from "@/src/lib/lead-sources/types";
 
 type LeadSearchSource = "site_sales" | "openstreetmap" | "cnpj_brasil" | "google_places";
+type QualificationFilter = "all" | "possible_whatsapp" | "missing_whatsapp" | "with_instagram";
 
-type SearchResultLead = (ExternalLead | NormalizedLead) & { saved?: boolean };
+type SearchResultLead = (ExternalLead | NormalizedLead) & {
+  qualification?: LeadQualification;
+  saved?: boolean;
+};
 
 type SearchFormState = {
   source: LeadSearchSource;
@@ -59,6 +78,13 @@ const sourceHints: Record<LeadSearchSource, string> = {
   site_sales: "Busca CNPJ + OpenStreetMap, priorizando telefone e ausencia de site.",
 };
 
+const qualificationFilterLabels: Record<QualificationFilter, string> = {
+  all: "Todos",
+  missing_whatsapp: "Sem WhatsApp",
+  possible_whatsapp: "Com possivel WhatsApp",
+  with_instagram: "Com Instagram",
+};
+
 function getLeadIdentifier(lead: SearchResultLead) {
   return "externalId" in lead ? lead.externalId : lead.sourcePlaceId;
 }
@@ -69,6 +95,55 @@ function getCoordinateLabel(lead: SearchResultLead) {
   }
 
   return `${lead.latitude.toFixed(6)}, ${lead.longitude.toFixed(6)}`;
+}
+
+function whatsappBadge(qualification: LeadQualification) {
+  if (qualification.whatsapp_status === "confirmed") {
+    return {
+      className: "bg-emerald-50 text-emerald-700",
+      label: "WhatsApp confirmado",
+    };
+  }
+
+  if (qualification.whatsapp_status === "possible") {
+    return {
+      className: "bg-blue-50 text-blue-700",
+      label: "Possivel WhatsApp",
+    };
+  }
+
+  if (qualification.whatsapp_status === "invalid") {
+    return {
+      className: "bg-red-50 text-red-700",
+      label: "Telefone invalido",
+    };
+  }
+
+  return {
+    className: "bg-slate-100 text-slate-700",
+    label: "Sem WhatsApp",
+  };
+}
+
+function instagramBadge(qualification: LeadQualification) {
+  if (qualification.instagram_status === "found") {
+    return {
+      className: "bg-pink-50 text-pink-700",
+      label: "Instagram",
+    };
+  }
+
+  if (qualification.instagram_status === "missing") {
+    return {
+      className: "bg-slate-100 text-slate-700",
+      label: "Sem Instagram",
+    };
+  }
+
+  return {
+    className: "bg-amber-50 text-amber-700",
+    label: "Instagram nao verificado",
+  };
 }
 
 async function parseJsonResponse<T>(response: Response) {
@@ -86,10 +161,34 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
   const [results, setResults] = useState<SearchResultLead[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isQualifyingInstagram, setIsQualifyingInstagram] = useState(false);
+  const [qualificationFilter, setQualificationFilter] = useState<QualificationFilter>("all");
+  const [qualificationProgress, setQualificationProgress] = useState("");
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
 
   const unsavedResults = useMemo(() => results.filter((lead) => !lead.saved), [results]);
+  const visibleResults = useMemo(
+    () =>
+      results.filter((lead) => {
+        const qualification = getLeadQualification(lead);
+
+        if (qualificationFilter === "possible_whatsapp") {
+          return qualification.whatsapp_status === "possible" || qualification.whatsapp_status === "confirmed";
+        }
+
+        if (qualificationFilter === "missing_whatsapp") {
+          return qualification.whatsapp_status === "missing" || qualification.whatsapp_status === "invalid";
+        }
+
+        if (qualificationFilter === "with_instagram") {
+          return qualification.instagram_status === "found";
+        }
+
+        return true;
+      }),
+    [qualificationFilter, results],
+  );
 
   function updateField<K extends keyof SearchFormState>(field: K, value: SearchFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -183,7 +282,8 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
         parseJsonResponse<{ results: SearchResultLead[]; warnings?: string[] }>(response),
       );
 
-      setResults(data.results);
+      setResults(data.results.map((lead) => qualifyLeadAfterScraping(lead)));
+      setQualificationFilter("all");
       const warnings = data.warnings ?? [];
       toast({
         title: "Busca concluida",
@@ -227,6 +327,92 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     );
 
     return data;
+  }
+
+  async function handleQualifyInstagram() {
+    const leadsToQualify = results.filter((lead) => {
+      const qualification = getLeadQualification(lead);
+
+      return qualification.instagram_status !== "found" && Boolean(lead.website);
+    });
+
+    if (leadsToQualify.length === 0) {
+      toast({
+        title: "Nada para qualificar",
+        description: "Nenhum lead com site disponivel para buscar Instagram.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsQualifyingInstagram(true);
+    setQualificationProgress(`Qualificando 0/${leadsToQualify.length}`);
+
+    try {
+      const updates = new Map<string, { qualification: LeadQualification; rawData: Record<string, unknown> }>();
+
+      for (let index = 0; index < leadsToQualify.length; index += 25) {
+        const chunk = leadsToQualify.slice(index, index + 25);
+        const payload = await fetch("/api/lead-qualification/instagram", {
+          body: JSON.stringify({
+            leads: chunk.map((lead) => ({
+              id: getLeadIdentifier(lead),
+              name: lead.name,
+              phone: lead.phone,
+              phone2: lead.phone2,
+              qualification: lead.qualification,
+              raw: "raw" in lead ? lead.raw : undefined,
+              rawData: lead.rawData,
+              website: lead.website,
+            })),
+          }),
+          headers: {
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+        }).then((response) =>
+          parseJsonResponse<{
+            results: Array<{
+              id: string;
+              qualification: LeadQualification;
+              rawData: Record<string, unknown>;
+            }>;
+          }>(response),
+        );
+
+        payload.results.forEach((result) => {
+          updates.set(result.id, {
+            qualification: result.qualification,
+            rawData: result.rawData,
+          });
+        });
+        setQualificationProgress(
+          `Qualificando ${Math.min(index + chunk.length, leadsToQualify.length)}/${leadsToQualify.length}`,
+        );
+      }
+
+      setResults((current) =>
+        current.map((lead) => {
+          const update = updates.get(getLeadIdentifier(lead));
+
+          return update ? { ...lead, ...update } : lead;
+        }),
+      );
+      toast({
+        title: "Qualificacao concluida",
+        description: "Busca publica por Instagram finalizada para os leads com site.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao qualificar Instagram",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsQualifyingInstagram(false);
+      setQualificationProgress("");
+    }
   }
 
   async function handleSaveLead(lead: SearchResultLead) {
@@ -476,14 +662,59 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
         </CardContent>
       </Card>
 
+      {results.length > 0 ? (
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid gap-2 sm:min-w-72">
+              <Label htmlFor="qualification-filter">Filtro de qualificacao</Label>
+              <select
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                id="qualification-filter"
+                onChange={(event) => setQualificationFilter(event.target.value as QualificationFilter)}
+                value={qualificationFilter}
+              >
+                {(Object.keys(qualificationFilterLabels) as QualificationFilter[]).map((filter) => (
+                  <option key={filter} value={filter}>
+                    {qualificationFilterLabels[filter]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {qualificationProgress ? (
+                <span className="text-sm text-slate-500">{qualificationProgress}</span>
+              ) : null}
+              <Button
+                disabled={isQualifyingInstagram}
+                onClick={handleQualifyInstagram}
+                type="button"
+                variant="outline"
+              >
+                {isQualifyingInstagram ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Instagram className="h-4 w-4" />
+                )}
+                Buscar Instagram dos leads
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {isSearching ? (
         <div className="flex min-h-72 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
           <Loader2 className="mr-2 h-5 w-5 animate-spin text-purple-600" />
           Consultando {sourceLabels[form.source]}...
         </div>
-      ) : results.length > 0 ? (
+      ) : visibleResults.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
-          {results.map((lead) => (
+          {visibleResults.map((lead) => {
+            const qualification = getLeadQualification(lead);
+            const whatsapp = whatsappBadge(qualification);
+            const instagram = instagramBadge(qualification);
+
+            return (
             <Card className="border-slate-200 bg-white shadow-sm" key={getLeadIdentifier(lead)}>
               <CardContent className="p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -510,8 +741,20 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                           OSM
                         </span>
                       ) : null}
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${whatsapp.className}`}>
+                        {whatsapp.label}
+                      </span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${instagram.className}`}>
+                        {instagram.label}
+                      </span>
                     </div>
                     <p className="mt-1 text-sm text-slate-500">{lead.category}</p>
+                    {qualification.instagram_status === "found" ? (
+                      <p className="mt-1 text-xs font-medium text-pink-700">
+                        Lead com Instagram
+                        {qualification.instagram_handle ? `: @${qualification.instagram_handle}` : ""}
+                      </p>
+                    ) : null}
                   </div>
                   <Button
                     disabled={lead.saved || savingIds.has(getLeadIdentifier(lead))}
@@ -575,7 +818,15 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
+        </div>
+      ) : results.length > 0 ? (
+        <div className="flex min-h-52 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
+          <h2 className="text-lg font-semibold text-slate-950">Nenhum lead nesse filtro</h2>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+            Ajuste o filtro de qualificacao para visualizar outros resultados encontrados.
+          </p>
         </div>
       ) : hasSearched ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">

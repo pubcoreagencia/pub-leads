@@ -95,4 +95,5 @@ export type LeadFilters = {
   status?: LeadStatus | "all";
   source?: LeadSource | "all";
   onlyWithPhone?: boolean;
+  qualification?: "all" | "with_whatsapp" | "without_whatsapp" | "with_instagram" | "without_instagram";
 };

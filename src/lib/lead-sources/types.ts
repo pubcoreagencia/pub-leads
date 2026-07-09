@@ -1,5 +1,6 @@
 import type { LeadCategoryId } from "@/config/lead-categories";
 import type { Lead } from "@/schemas/lead";
+import type { LeadQualification } from "@/src/lib/lead-qualification/qualifier";
 
 export type LeadSourceId = "openstreetmap" | "cnpj_brasil" | "google_places";
 
@@ -50,6 +51,7 @@ export type NormalizedLead = {
   rating: number | null;
   reviewsCount: number | null;
   rawData: Record<string, unknown>;
+  qualification?: LeadQualification;
   saved?: boolean;
 };
 

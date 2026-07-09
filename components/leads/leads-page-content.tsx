@@ -13,6 +13,10 @@ import { toast } from "@/hooks/use-toast";
 import type { Lead, LeadFilters, LeadSource, LeadStatus } from "@/schemas/lead";
 import { leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
 import { deleteLeads as deleteManyLeads, fetchLeads } from "@/services/leads";
+import {
+  getLeadQualification,
+  type LeadQualification,
+} from "@/src/lib/lead-qualification/qualifier";
 
 type FilterState = {
   name: string;
@@ -21,6 +25,7 @@ type FilterState = {
   status: LeadStatus | "all";
   source: LeadSource | "all";
   onlyWithPhone: boolean;
+  qualification: NonNullable<LeadFilters["qualification"]>;
 };
 
 const initialFilters: FilterState = {
@@ -30,6 +35,7 @@ const initialFilters: FilterState = {
   status: "all",
   source: "all",
   onlyWithPhone: false,
+  qualification: "all",
 };
 
 function toLeadFilters(filters: FilterState): LeadFilters {
@@ -38,6 +44,7 @@ function toLeadFilters(filters: FilterState): LeadFilters {
     city: filters.city.trim() || undefined,
     category: filters.category.trim() || undefined,
     onlyWithPhone: filters.onlyWithPhone,
+    qualification: filters.qualification,
     status: filters.status,
     source: filters.source,
   };
@@ -51,6 +58,34 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
   }).format(new Date(value));
+}
+
+function whatsappBadge(qualification: LeadQualification) {
+  if (qualification.whatsapp_status === "confirmed") {
+    return { className: "bg-emerald-50 text-emerald-700", label: "WhatsApp confirmado" };
+  }
+
+  if (qualification.whatsapp_status === "possible") {
+    return { className: "bg-blue-50 text-blue-700", label: "Possivel WhatsApp" };
+  }
+
+  if (qualification.whatsapp_status === "invalid") {
+    return { className: "bg-red-50 text-red-700", label: "Telefone invalido" };
+  }
+
+  return { className: "bg-slate-100 text-slate-700", label: "Sem WhatsApp" };
+}
+
+function instagramBadge(qualification: LeadQualification) {
+  if (qualification.instagram_status === "found") {
+    return { className: "bg-pink-50 text-pink-700", label: "Instagram" };
+  }
+
+  if (qualification.instagram_status === "missing") {
+    return { className: "bg-slate-100 text-slate-700", label: "Sem Instagram" };
+  }
+
+  return { className: "bg-amber-50 text-amber-700", label: "Instagram nao verificado" };
 }
 
 export function LeadsPageContent() {
@@ -254,7 +289,7 @@ export function LeadsPageContent() {
             <SlidersHorizontal className="h-4 w-4 text-purple-600" />
             Filtros
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
             <div className="grid gap-2">
               <Label htmlFor="filter-name">Nome</Label>
               <Input
@@ -324,6 +359,26 @@ export function LeadsPageContent() {
                     {leadSourceLabels[source]}
                   </option>
                 ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="filter-qualification">Qualificacao</Label>
+              <select
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                id="filter-qualification"
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    qualification: event.target.value as FilterState["qualification"],
+                  }))
+                }
+                value={filters.qualification}
+              >
+                <option value="all">Todas</option>
+                <option value="with_whatsapp">Com WhatsApp</option>
+                <option value="without_whatsapp">Sem WhatsApp</option>
+                <option value="with_instagram">Com Instagram</option>
+                <option value="without_instagram">Sem Instagram</option>
               </select>
             </div>
             <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
@@ -408,7 +463,12 @@ export function LeadsPageContent() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {leads.map((lead) => (
+                  {leads.map((lead) => {
+                    const qualification = getLeadQualification(lead);
+                    const whatsapp = whatsappBadge(qualification);
+                    const instagram = instagramBadge(qualification);
+
+                    return (
                     <tr className="transition hover:bg-purple-50/50" key={lead.id}>
                       <td className="px-5 py-4 align-top">
                         <input
@@ -433,6 +493,17 @@ export function LeadsPageContent() {
                             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                               <PhoneCall className="h-3 w-3" />
                               com telefone
+                            </span>
+                          ) : null}
+                          <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${whatsapp.className}`}>
+                            {whatsapp.label}
+                          </span>
+                          <span className={`ml-1 mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${instagram.className}`}>
+                            {instagram.label}
+                          </span>
+                          {qualification.instagram_status === "found" && qualification.whatsapp_status === "missing" ? (
+                            <span className="mt-1 block text-xs font-medium text-pink-700">
+                              Lead com Instagram
                             </span>
                           ) : null}
                         </button>
@@ -469,7 +540,8 @@ export function LeadsPageContent() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
