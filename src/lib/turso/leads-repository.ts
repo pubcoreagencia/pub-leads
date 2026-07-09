@@ -331,12 +331,36 @@ export async function updateLead(userId: string, leadId: string, data: LeadUpdat
 }
 
 export async function deleteLead(userId: string, leadId: string) {
-  const result = await getTursoClient().execute({
-    args: [userId, leadId],
-    sql: "delete from leads where user_id = ? and id = ?",
+  return (await deleteLeads(userId, [leadId])) > 0;
+}
+
+export async function deleteLeads(userId: string, leadIds: string[]) {
+  const ids = Array.from(new Set(leadIds.map(cleanString).filter(Boolean)));
+
+  if (ids.length === 0) {
+    return 0;
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const args: InValue[] = [userId, ...ids];
+  const client = getTursoClient();
+
+  await client.execute({
+    args,
+    sql: `delete from lead_messages where user_id = ? and lead_id in (${placeholders})`,
   });
 
-  return result.rowsAffected > 0;
+  await client.execute({
+    args,
+    sql: `delete from lead_notes where user_id = ? and lead_id in (${placeholders})`,
+  });
+
+  const result = await getTursoClient().execute({
+    args,
+    sql: `delete from leads where user_id = ? and id in (${placeholders})`,
+  });
+
+  return Number(result.rowsAffected ?? 0);
 }
 
 export async function updateLeadStatus(userId: string, leadId: string, status: LeadStatus) {

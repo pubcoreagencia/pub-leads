@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { LeadFormValues } from "@/schemas/lead";
 import { leadFormSchema, leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
-import { createLead, listLeads } from "@/src/lib/turso/leads-repository";
+import { createLead, deleteLeads, listLeads } from "@/src/lib/turso/leads-repository";
 import type { LeadWriteInput } from "@/src/lib/turso/types";
 
 const listSchema = z.object({
@@ -15,6 +15,10 @@ const listSchema = z.object({
   onlyWithPhone: z.enum(["true", "false"]).optional(),
   source: z.union([leadSourceSchema, z.literal("all")]).optional(),
   status: z.union([leadStatusSchema, z.literal("all")]).optional(),
+});
+
+const bulkDeleteSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
 });
 
 function cleanOptional(value: string | undefined) {
@@ -110,4 +114,27 @@ export async function POST(request: Request) {
   const lead = await createLead(userId, formToLeadInput(parsed.data));
 
   return NextResponse.json({ lead });
+}
+
+export async function DELETE(request: Request) {
+  if (!hasTursoConfig()) {
+    return NextResponse.json({ error: getTursoUnavailableMessage() }, { status: 503 });
+  }
+
+  const userId = await getUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = bulkDeleteSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Lista de leads invalida." }, { status: 400 });
+  }
+
+  const deletedCount = await deleteLeads(userId, parsed.data.ids);
+
+  return NextResponse.json({ deletedCount });
 }

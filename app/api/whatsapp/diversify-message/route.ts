@@ -1,0 +1,75 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { createClient } from "@/lib/supabase/server";
+import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
+import { createMessage } from "@/src/lib/turso/lead-messages-repository";
+import { getLeadById } from "@/src/lib/turso/leads-repository";
+import { diversifyBaseCopy } from "@/src/lib/whatsapp/diversify-copy";
+import { manualWhatsAppProvider } from "@/src/lib/whatsapp/provider";
+
+const diversifyMessageSchema = z.object({
+  city: z.string().trim().max(120).optional().default(""),
+  copyBase: z.string().trim().min(10).max(5000),
+  leadId: z.string().uuid(),
+  niche: z.string().trim().max(120).optional().default(""),
+  variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
+});
+
+export async function POST(request: Request) {
+  if (!hasTursoConfig()) {
+    return NextResponse.json({ error: getTursoUnavailableMessage() }, { status: 503 });
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  const parsed = diversifyMessageSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
+  }
+
+  const { city, copyBase, leadId, niche, variantSeed } = parsed.data;
+  const lead = await getLeadById(user.id, leadId);
+
+  if (!lead) {
+    return NextResponse.json({ error: "Lead nao encontrado." }, { status: 404 });
+  }
+
+  const message = diversifyBaseCopy({
+    city,
+    copyBase,
+    lead,
+    niche,
+    variantSeed,
+  });
+  const phone = lead.whatsapp || lead.phone || "";
+  const waLink = phone
+    ? manualWhatsAppProvider.createMessageLink({ phone, message })
+    : null;
+
+  const savedMessage = await createMessage(user.id, lead.id, {
+    message,
+    objective: JSON.stringify({
+      city,
+      diversified: true,
+      niche,
+      source: "base_copy_diversification",
+    }),
+    tone: "base_copy_diversification",
+  });
+
+  return NextResponse.json({
+    message,
+    savedMessage,
+    waLink,
+  });
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, PhoneCall, Plus, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Loader2, PhoneCall, Plus, Search, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 
 import { LeadDetailModal } from "@/components/leads/lead-detail-modal";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { leadSourceLabels, leadStatusLabels } from "@/config/pipeline";
 import { toast } from "@/hooks/use-toast";
 import type { Lead, LeadFilters, LeadSource, LeadStatus } from "@/schemas/lead";
 import { leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
-import { fetchLeads } from "@/services/leads";
+import { deleteLeads as deleteManyLeads, fetchLeads } from "@/services/leads";
 
 type FilterState = {
   name: string;
@@ -59,8 +59,10 @@ export function LeadsPageContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const loadLeads = useCallback(async () => {
     setIsLoading(true);
@@ -68,6 +70,10 @@ export function LeadsPageContent() {
     try {
       const items = await fetchLeads(toLeadFilters(appliedFilters));
       setLeads(items);
+      setSelectedLeadIds((current) => {
+        const visibleIds = new Set(items.map((lead) => lead.id));
+        return new Set(Array.from(current).filter((id) => visibleIds.has(id)));
+      });
     } catch (error) {
       toast({
         title: "Erro ao carregar leads",
@@ -100,6 +106,81 @@ export function LeadsPageContent() {
   function handleClearFilters() {
     setFilters(initialFilters);
     setAppliedFilters(initialFilters);
+  }
+
+  function toggleLeadSelection(leadId: string, checked: boolean) {
+    setSelectedLeadIds((current) => {
+      const next = new Set(current);
+
+      if (checked) {
+        next.add(leadId);
+      } else {
+        next.delete(leadId);
+      }
+
+      return next;
+    });
+  }
+
+  function toggleAllVisible(checked: boolean) {
+    setSelectedLeadIds((current) => {
+      const next = new Set(current);
+
+      leads.forEach((lead) => {
+        if (checked) {
+          next.add(lead.id);
+        } else {
+          next.delete(lead.id);
+        }
+      });
+
+      return next;
+    });
+  }
+
+  async function handleDeleteSelected() {
+    const ids = Array.from(selectedLeadIds);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir ${ids.length} leads? Essa acao nao pode ser desfeita.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const deletedCount = await deleteManyLeads(ids);
+      const deletedIds = new Set(ids);
+
+      setLeads((current) => current.filter((lead) => !deletedIds.has(lead.id)));
+      setSelectedLeadIds(new Set());
+
+      if (selectedLead && deletedIds.has(selectedLead.id)) {
+        setSelectedLead(null);
+        setIsModalOpen(false);
+      }
+
+      toast({
+        title: "Leads excluidos",
+        description: `${deletedCount} leads foram removidos.`,
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir leads",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   async function handleEnrichLead(lead: Lead) {
@@ -148,6 +229,9 @@ export function LeadsPageContent() {
       });
     }
   }
+
+  const selectedCount = selectedLeadIds.size;
+  const allVisibleSelected = leads.length > 0 && leads.every((lead) => selectedLeadIds.has(lead.id));
 
   return (
     <section className="space-y-6">
@@ -268,6 +352,23 @@ export function LeadsPageContent() {
 
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardContent className="p-0">
+          {selectedCount > 0 ? (
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-red-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <span className="text-sm font-medium text-red-900">
+                {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
+              </span>
+              <Button
+                className="border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800"
+                disabled={isDeleting}
+                onClick={handleDeleteSelected}
+                type="button"
+                variant="outline"
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {selectedCount === 1 ? "Excluir selecionado" : `Excluir ${selectedCount} leads`}
+              </Button>
+            </div>
+          ) : null}
           {isLoading ? (
             <div className="flex min-h-72 items-center justify-center gap-3 text-sm text-slate-500">
               <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
@@ -288,6 +389,15 @@ export function LeadsPageContent() {
               <table className="w-full min-w-[880px] border-collapse text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
+                    <th className="w-12 px-5 py-3">
+                      <input
+                        aria-label="Selecionar todos os leads visiveis"
+                        checked={allVisibleSelected}
+                        className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        onChange={(event) => toggleAllVisible(event.target.checked)}
+                        type="checkbox"
+                      />
+                    </th>
                     <th className="px-5 py-3 font-semibold">Lead</th>
                     <th className="px-5 py-3 font-semibold">Cidade</th>
                     <th className="px-5 py-3 font-semibold">Categoria</th>
@@ -300,6 +410,15 @@ export function LeadsPageContent() {
                 <tbody className="divide-y divide-slate-100">
                   {leads.map((lead) => (
                     <tr className="transition hover:bg-purple-50/50" key={lead.id}>
+                      <td className="px-5 py-4 align-top">
+                        <input
+                          aria-label={`Selecionar ${lead.name}`}
+                          checked={selectedLeadIds.has(lead.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                          onChange={(event) => toggleLeadSelection(lead.id, event.target.checked)}
+                          type="checkbox"
+                        />
+                      </td>
                       <td className="px-5 py-4">
                         <button
                           className="text-left"

@@ -65,6 +65,18 @@ export async function deleteLead(leadId: string) {
   }).then((response) => parseJsonResponse<{ ok: boolean }>(response));
 }
 
+export async function deleteLeads(leadIds: string[]) {
+  const payload = await fetch("/api/leads", {
+    body: JSON.stringify({ ids: leadIds }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "DELETE",
+  }).then((response) => parseJsonResponse<{ deletedCount: number }>(response));
+
+  return payload.deletedCount;
+}
+
 export async function fetchLeadNotes(leadId: string) {
   const payload = await fetch(`/api/leads/${leadId}/notes`, {
     cache: "no-store",
