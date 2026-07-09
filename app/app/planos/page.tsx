@@ -21,7 +21,7 @@ export default async function PlanosPage() {
     redirect("/login?redirectTo=/app/planos");
   }
 
-  const usage = await getUsageSummary(user.id);
+  const usage = await getUsageSummary(user.id, user.email);
 
   return <PlansPageContent usage={usage} />;
 }

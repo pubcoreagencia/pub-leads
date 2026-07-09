@@ -190,7 +190,7 @@ export async function POST(request: Request) {
   const failures: string[] = [];
 
   try {
-    if (!(await canSearch(user.id))) {
+    if (!(await canSearch(user.id, user.email))) {
       throw new Error("Limite mensal de buscas do plano atingido.");
     }
 

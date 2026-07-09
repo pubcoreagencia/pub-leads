@@ -4,6 +4,10 @@ import {
   countSearchesThisMonth,
   createSearchLog,
 } from "@/src/lib/turso/search-logs-repository";
+import {
+  internalUnlimitedPlanId,
+  isInternalUnlimitedEmail,
+} from "@/src/lib/usage/internal-unlimited";
 
 export type AppPlanId = "free" | "mensal" | "anual" | "vitalicio";
 
@@ -84,8 +88,37 @@ function normalizePlanId(value: string | null | undefined): AppPlanId {
   return "free";
 }
 
-export async function getCurrentPlan(userId: string): Promise<CurrentPlan> {
+async function resolveCurrentUserEmail(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  userEmail?: string | null,
+) {
+  if (userEmail) {
+    return userEmail;
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user?.id === userId) {
+    return user.email;
+  }
+
+  return null;
+}
+
+export async function getCurrentPlan(
+  userId: string,
+  userEmail?: string | null,
+): Promise<CurrentPlan> {
   const supabase = await createClient();
+  const resolvedEmail = await resolveCurrentUserEmail(supabase, userId, userEmail);
+
+  if (isInternalUnlimitedEmail(resolvedEmail)) {
+    return planLimitsById[internalUnlimitedPlanId];
+  }
+
   const { data } = await supabase
     .from("profiles")
     .select("current_plan_id")
@@ -97,8 +130,11 @@ export async function getCurrentPlan(userId: string): Promise<CurrentPlan> {
   return planLimitsById[planId];
 }
 
-export async function getUsageSummary(userId: string): Promise<UsageSummary> {
-  const plan = await getCurrentPlan(userId);
+export async function getUsageSummary(
+  userId: string,
+  userEmail?: string | null,
+): Promise<UsageSummary> {
+  const plan = await getCurrentPlan(userId, userEmail);
   const [leadCount, searchCount] = await Promise.all([
     countLeads(userId),
     countSearchesThisMonth(userId),
@@ -113,12 +149,12 @@ export async function getUsageSummary(userId: string): Promise<UsageSummary> {
   };
 }
 
-export async function canSearch(userId: string) {
-  return (await getUsageSummary(userId)).canSearch;
+export async function canSearch(userId: string, userEmail?: string | null) {
+  return (await getUsageSummary(userId, userEmail)).canSearch;
 }
 
-export async function canCreateLead(userId: string) {
-  return (await getUsageSummary(userId)).canCreateLead;
+export async function canCreateLead(userId: string, userEmail?: string | null) {
+  return (await getUsageSummary(userId, userEmail)).canCreateLead;
 }
 
 export async function incrementSearchUsage(userId: string) {

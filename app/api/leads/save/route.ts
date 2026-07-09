@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const usage = await getUsageSummary(user.id);
+  const usage = await getUsageSummary(user.id, user.email);
   const leadLimit = usage.plan.limits.leadLimit;
 
   if (leadLimit !== null) {

@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { hasSupabaseConfig } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+import {
+  internalUnlimitedPlanName,
+  isInternalUnlimitedEmail,
+} from "@/src/lib/usage/internal-unlimited";
 
 type ProfileSummary = {
   full_name: string | null;
@@ -43,7 +47,9 @@ export default async function AppLayout({ children }: Readonly<{ children: React
 
   const profile = data as ProfileSummary | null;
   const userName = profile?.full_name ?? user.user_metadata.full_name ?? user.email ?? "Usuário";
-  const currentPlan = profile?.plans?.name ?? "Free";
+  const currentPlan = isInternalUnlimitedEmail(user.email)
+    ? internalUnlimitedPlanName
+    : (profile?.plans?.name ?? "Free");
 
   return (
     <DashboardShell

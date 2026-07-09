@@ -21,7 +21,7 @@ export default async function DashboardPage() {
     redirect("/login?redirectTo=/app/dashboard");
   }
 
-  const summary = await getAnalyticsSummary(user.id);
+  const summary = await getAnalyticsSummary(user.id, user.email);
 
   return <DashboardPageContent summary={summary} />;
 }

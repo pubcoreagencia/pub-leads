@@ -21,7 +21,7 @@ export default async function AnalyticsPage() {
     redirect("/login?redirectTo=/app/analytics");
   }
 
-  const summary = await getAnalyticsSummary(user.id);
+  const summary = await getAnalyticsSummary(user.id, user.email);
 
   return <AnalyticsPageContent summary={summary} />;
 }

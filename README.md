@@ -43,6 +43,8 @@ Depois de configurar Supabase e Turso:
 ```bash
 npm run turso:migrate
 npm run turso:verify
+npm run turso:migrate:cnpj
+npm run turso:verify:cnpj
 ```
 
 Somente apos a verificacao passar, avalie `scripts/cleanup-supabase-leads.sql`. O arquivo esta comentado de proposito e nao deve ser executado antes da validacao em producao.

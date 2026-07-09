@@ -121,8 +121,11 @@ function topCategories(leads: Lead[]) {
     .map(([label, value]) => ({ label, value }));
 }
 
-export async function getAnalyticsSummary(userId: string): Promise<AnalyticsSummary> {
-  const usage = await getUsageSummary(userId);
+export async function getAnalyticsSummary(
+  userId: string,
+  userEmail?: string | null,
+): Promise<AnalyticsSummary> {
+  const usage = await getUsageSummary(userId, userEmail);
   const [leads, messagesCount, searches] = await Promise.all([
     listLeads(userId, { limit: 5000 }),
     countMessages(userId),
