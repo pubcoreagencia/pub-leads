@@ -9,11 +9,14 @@ import { diversifyBaseCopy } from "@/src/lib/whatsapp/diversify-copy";
 import { manualWhatsAppProvider } from "@/src/lib/whatsapp/provider";
 
 const diversifyMessageSchema = z.object({
+  baseCopy: z.string().trim().min(10).max(5000).optional(),
   city: z.string().trim().max(120).optional().default(""),
-  copyBase: z.string().trim().min(10).max(5000),
+  copyBase: z.string().trim().min(10).max(5000).optional(),
   leadId: z.string().uuid(),
   niche: z.string().trim().max(120).optional().default(""),
   variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
+}).refine((data) => data.baseCopy || data.copyBase, {
+  message: "Informe a copy base.",
 });
 
 export async function POST(request: Request) {
@@ -37,7 +40,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
   }
 
-  const { city, copyBase, leadId, niche, variantSeed } = parsed.data;
+  const { city, leadId, niche, variantSeed } = parsed.data;
+  const baseCopy = parsed.data.baseCopy ?? parsed.data.copyBase ?? "";
   const lead = await getLeadById(user.id, leadId);
 
   if (!lead) {
@@ -45,8 +49,8 @@ export async function POST(request: Request) {
   }
 
   const message = diversifyBaseCopy({
+    baseCopy,
     city,
-    copyBase,
     lead,
     niche,
     variantSeed,

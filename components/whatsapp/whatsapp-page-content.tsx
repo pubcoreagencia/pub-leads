@@ -98,8 +98,8 @@ export function WhatsAppPageContent() {
     try {
       const response = await fetch("/api/whatsapp/diversify-message", {
         body: JSON.stringify({
+          baseCopy: copyBase,
           city,
-          copyBase,
           leadId,
           niche,
           variantSeed,
@@ -120,7 +120,7 @@ export function WhatsAppPageContent() {
       setVariantSeed((current) => current + 1);
       toast({
         title: "Mensagem diversificada",
-        description: "A variação foi salva no historico do lead.",
+        description: "A variacao foi salva no historico do lead.",
         variant: "success",
       });
     } catch (error) {
@@ -205,11 +205,11 @@ export function WhatsAppPageContent() {
                       setWaLink(null);
                       setVariantSeed(1);
                     }}
-                    placeholder="Ex: Olá, {nome}! Vi que a {empresa} atua em {cidade} no nicho de {nicho}. Posso te mostrar uma ideia rápida por aqui?"
+                    placeholder="Ex: Ola LEAD, estamos selecionando empresas do nicho COPY em CIDADE. Posso te enviar mais detalhes?"
                     value={copyBase}
                   />
                   <p className="text-xs leading-5 text-slate-500">
-                    Placeholders: {"{nome}"}, {"{empresa}"}, {"{cidade}"}, {"{nicho}"}, {"{telefone}"}, {"{site}"}.
+                    Placeholders: CIDADE, COPY/NICHO, LEAD/EMPRESA, {"{cidade}"}, {"{copy}"}, {"{lead}"}.
                   </p>
                 </div>
 
@@ -223,7 +223,7 @@ export function WhatsAppPageContent() {
                         setMessage("");
                         setWaLink(null);
                       }}
-                      placeholder="Ex: São Paulo"
+                      placeholder="Ex: Nova Friburgo"
                       value={city}
                     />
                   </div>
@@ -236,7 +236,7 @@ export function WhatsAppPageContent() {
                         setMessage("");
                         setWaLink(null);
                       }}
-                      placeholder="Ex: clínicas odontológicas"
+                      placeholder="Ex: clinicas odontologicas"
                       value={niche}
                     />
                   </div>
