@@ -1,4 +1,5 @@
 import type { Lead, LeadFilters, LeadSource, LeadStatus } from "@/schemas/lead";
+import type { LeadSourceId } from "@/src/lib/lead-sources/types";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -152,4 +153,63 @@ export type TursoSearchLogRow = {
 export type CountPoint = {
   label: string;
   value: number;
+};
+
+export type ScrapingSessionStatus = "idle" | "running" | "completed" | "failed" | "cancelled";
+
+export type ScrapingSessionRow = {
+  id: string;
+  user_id: string;
+  source: string;
+  status: ScrapingSessionStatus;
+  city: string | null;
+  niche: string | null;
+  query: string | null;
+  requested_limit: number | null;
+  results_count: number;
+  selected_count: number;
+  filters: string | null;
+  source_run_id: string | null;
+  apify_run_id: string | null;
+  apify_dataset_id: string | null;
+  error_message: string | null;
+  metadata: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string | null;
+};
+
+export type ScrapingSessionResultRow = {
+  id: string;
+  session_id: string;
+  user_id: string;
+  external_id: string | null;
+  source: LeadSourceId;
+  name: string;
+  company: string | null;
+  category: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  website: string | null;
+  instagram_url: string | null;
+  instagram_handle: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: string | null;
+  phone_type: string | null;
+  whatsapp_status: string | null;
+  instagram_status: string | null;
+  qualification_tags: string | null;
+  qualification_score: number | null;
+  metadata: string;
+  is_selected: number;
+  is_saved: number;
+  saved_lead_id: string | null;
+  created_at: string;
+  updated_at: string;
 };

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getApifyRun } from "@/src/lib/apify/client";
 import { getApifyRunByRunId, updateApifyRun } from "@/src/lib/turso/apify-runs-repository";
+import { updateScrapingSession } from "@/src/lib/turso/scraping-sessions-repository";
 
 export async function GET(_request: Request, context: { params: Promise<{ runId: string }> }) {
   const supabase = await createClient(); const { data: { user } } = await supabase.auth.getUser();
@@ -11,5 +12,13 @@ export async function GET(_request: Request, context: { params: Promise<{ runId:
   const remote = await getApifyRun(runId);
   const status = remote.status === "SUCCEEDED" ? "succeeded" : remote.status === "FAILED" ? "failed" : remote.status === "ABORTED" ? "aborted" : "running";
   const run = await updateApifyRun(user.id, runId, { dataset_id: remote.defaultDatasetId ?? stored.dataset_id, estimated_cost_usd: remote.usageTotalUsd ?? stored.estimated_cost_usd, finished_at: remote.finishedAt ?? null, status });
+  const sessionId = typeof stored.metadata.sessionId === "string" ? stored.metadata.sessionId : null;
+  if (sessionId) {
+    await updateScrapingSession(user.id, sessionId, {
+      apify_dataset_id: remote.defaultDatasetId ?? stored.dataset_id,
+      error_message: status === "failed" || status === "aborted" ? "A execucao Apify nao foi concluida." : null,
+      status: status === "succeeded" ? "running" : status === "failed" || status === "aborted" ? "failed" : "running",
+    });
+  }
   return NextResponse.json({ run });
 }

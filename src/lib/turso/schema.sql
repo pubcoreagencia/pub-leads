@@ -95,6 +95,63 @@ create table if not exists apify_runs (
   metadata text not null default '{}'
 );
 
+create table if not exists scraping_sessions (
+  id text primary key,
+  user_id text not null,
+  source text not null,
+  status text not null default 'idle',
+  city text,
+  niche text,
+  query text,
+  requested_limit integer,
+  results_count integer not null default 0,
+  selected_count integer not null default 0,
+  filters text,
+  source_run_id text,
+  apify_run_id text,
+  apify_dataset_id text,
+  error_message text,
+  metadata text not null default '{}',
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp,
+  expires_at text
+);
+
+create table if not exists scraping_session_results (
+  id text primary key,
+  session_id text not null references scraping_sessions(id) on delete cascade,
+  user_id text not null,
+  external_id text,
+  source text not null,
+  name text not null,
+  company text,
+  category text,
+  phone text,
+  whatsapp text,
+  email text,
+  website text,
+  instagram_url text,
+  instagram_handle text,
+  address text,
+  city text,
+  state text,
+  country text,
+  latitude real,
+  longitude real,
+  status text,
+  phone_type text,
+  whatsapp_status text,
+  instagram_status text,
+  qualification_tags text,
+  qualification_score integer,
+  metadata text not null default '{}',
+  is_selected integer not null default 0,
+  is_saved integer not null default 0,
+  saved_lead_id text,
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
+);
+
 create table if not exists cnpj_establishments (
   cnpj text primary key,
   cnpj_basico text,
@@ -145,6 +202,14 @@ create index if not exists lead_messages_user_lead_idx on lead_messages(user_id,
 create index if not exists search_logs_user_created_at_idx on search_logs(user_id, created_at);
 create index if not exists search_logs_user_source_idx on search_logs(user_id, source);
 create index if not exists apify_runs_user_started_idx on apify_runs(user_id, started_at);
+create index if not exists scraping_sessions_user_updated_idx on scraping_sessions(user_id, updated_at);
+create index if not exists scraping_sessions_user_status_idx on scraping_sessions(user_id, status);
+create index if not exists scraping_session_results_session_idx on scraping_session_results(session_id);
+create index if not exists scraping_session_results_user_session_idx on scraping_session_results(user_id, session_id);
+create index if not exists scraping_session_results_user_saved_idx on scraping_session_results(user_id, is_saved);
+create unique index if not exists scraping_session_results_session_external_unique_idx
+  on scraping_session_results(session_id, external_id)
+  where external_id is not null and external_id <> '';
 create index if not exists cnpj_establishments_uf_municipio_idx on cnpj_establishments(uf, municipio);
 create index if not exists cnpj_establishments_cnae_idx on cnpj_establishments(cnae_fiscal);
 create index if not exists cnpj_establishments_phone_idx on cnpj_establishments(telefone_1, telefone_2);
@@ -165,4 +230,20 @@ for each row
 when new.updated_at = old.updated_at
 begin
   update cnpj_establishments set updated_at = current_timestamp where cnpj = old.cnpj;
+end;
+
+create trigger if not exists scraping_sessions_set_updated_at
+after update on scraping_sessions
+for each row
+when new.updated_at = old.updated_at
+begin
+  update scraping_sessions set updated_at = current_timestamp where id = old.id;
+end;
+
+create trigger if not exists scraping_session_results_set_updated_at
+after update on scraping_session_results
+for each row
+when new.updated_at = old.updated_at
+begin
+  update scraping_session_results set updated_at = current_timestamp where id = old.id;
 end;

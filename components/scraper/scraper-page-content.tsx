@@ -13,6 +13,7 @@ import {
   Phone,
   Save,
   Search,
+  Trash2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -40,11 +41,37 @@ type QualificationFilter =
   | "missing_instagram"
   | "with_site"
   | "without_site"
+  | "saved"
+  | "not_saved"
   | "best";
 
 type SearchResultLead = (ExternalLead | NormalizedLead) & {
   qualification?: LeadQualification;
   saved?: boolean;
+  savedLeadId?: string | null;
+  selected?: boolean;
+  sessionResultId?: string;
+};
+
+type ScrapingSession = {
+  apify_run_id: string | null;
+  city: string | null;
+  created_at: string;
+  error_message: string | null;
+  filters: Record<string, unknown>;
+  id: string;
+  niche: string | null;
+  requested_limit: number | null;
+  results_count: number;
+  selected_count: number;
+  source: string;
+  status: "idle" | "running" | "completed" | "failed" | "cancelled";
+  updated_at: string;
+};
+
+type ScrapingSessionPayload = {
+  results: SearchResultLead[];
+  session: ScrapingSession | null;
 };
 
 type SearchFormState = {
@@ -108,7 +135,9 @@ const qualificationFilterLabels: Record<QualificationFilter, string> = {
   landline: "Telefone fixo",
   missing_whatsapp: "Sem WhatsApp",
   missing_instagram: "Sem Instagram",
+  not_saved: "Nao salvos",
   possible_whatsapp: "Com possivel WhatsApp",
+  saved: "Salvos",
   with_instagram: "Com Instagram",
   with_site: "Com site",
   without_site: "Sem site",
@@ -228,6 +257,9 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [apifyAvailability, setApifyAvailability] = useState<ApifyAvailability>({ available: false });
+  const [currentSession, setCurrentSession] = useState<ScrapingSession | null>(null);
+  const [isDiscardingSession, setIsDiscardingSession] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   const apifyEnabled = apifyAvailability.available;
 
   useEffect(() => {
@@ -238,6 +270,131 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       .catch(() => { if (active) setApifyAvailability({ available: false, reason: "missing_token" }); });
     return () => { active = false; };
   }, []);
+
+  function applySessionPayload(payload: ScrapingSessionPayload) {
+    setCurrentSession(payload.session);
+    setResults(payload.results.map((lead) => qualifyLeadAfterScraping(lead)));
+    setSelectedResultIds(new Set(payload.results.filter((lead) => lead.selected && !lead.saved).map(getLeadIdentifier)));
+    setHasSearched(Boolean(payload.session) || payload.results.length > 0);
+
+    if (payload.session) {
+      const source = payload.session.source as LeadSearchSource;
+      const filters = payload.session.filters ?? {};
+      const nextFilter =
+        typeof filters.qualificationFilter === "string"
+          ? filters.qualificationFilter as QualificationFilter
+          : "all";
+
+      if (nextFilter in qualificationFilterLabels) {
+        setQualificationFilter(nextFilter);
+      }
+
+      setForm((current) => ({
+        ...current,
+        city: payload.session?.city ?? current.city,
+        limit: payload.session?.requested_limit ? String(payload.session.requested_limit) : current.limit,
+        source: source in sourceLabels ? source : current.source,
+      }));
+
+      if (payload.session.status === "running") {
+        setQualificationProgress("Busca em andamento. Os resultados serao restaurados automaticamente quando terminarem.");
+      } else if (payload.session.status === "failed" && payload.session.error_message) {
+        setQualificationProgress(payload.session.error_message);
+      }
+    }
+  }
+
+  async function refreshCurrentSession() {
+    const payload = await fetch("/api/scraping-sessions/current", { cache: "no-store" })
+      .then((response) => parseJsonResponse<ScrapingSessionPayload>(response));
+    applySessionPayload(payload);
+  }
+
+  useEffect(() => {
+    let active = true;
+    setIsLoadingSession(true);
+    fetch("/api/scraping-sessions/current", { cache: "no-store" })
+      .then((response) => parseJsonResponse<ScrapingSessionPayload>(response))
+      .then((payload) => {
+        if (active) {
+          applySessionPayload(payload);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setCurrentSession(null);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingSession(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!currentSession?.apify_run_id || currentSession.status !== "running") {
+      return;
+    }
+
+    let active = true;
+    const runId = currentSession.apify_run_id;
+
+    async function pollRun() {
+      try {
+        const runState = await fetch(`/api/lead-sources/apify/runs/${runId}`)
+          .then((response) => parseJsonResponse<{ run: { status: string } }>(response));
+
+        if (!active) {
+          return;
+        }
+
+        if (runState.run.status === "failed" || runState.run.status === "aborted") {
+          await refreshCurrentSession();
+          setIsSearching(false);
+          return;
+        }
+
+        if (runState.run.status === "succeeded") {
+          const imported = await fetch(`/api/lead-sources/apify/runs/${runId}/import`, { method: "POST" })
+            .then((response) => parseJsonResponse<ScrapingSessionPayload>(response));
+
+          if (!active) {
+            return;
+          }
+
+          applySessionPayload(imported);
+          setIsSearching(false);
+          setQualificationProgress("Dataset Apify importado.");
+          toast({
+            title: "Busca Apify concluida",
+            description: `${imported.results.length} leads encontrados.`,
+            variant: "success",
+          });
+        }
+      } catch {
+        if (active) {
+          setIsSearching(false);
+        }
+      }
+    }
+
+    setIsSearching(true);
+    void pollRun();
+    const interval = window.setInterval(() => {
+      void pollRun();
+    }, 5000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSession?.apify_run_id, currentSession?.status]);
 
   const visibleResults = useMemo(
     () =>
@@ -285,6 +442,14 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           );
         }
 
+        if (qualificationFilter === "saved") {
+          return Boolean(lead.saved);
+        }
+
+        if (qualificationFilter === "not_saved") {
+          return !lead.saved;
+        }
+
         return true;
       }),
     [qualificationFilter, results],
@@ -329,11 +494,65 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     }));
   }
 
+  async function createSearchSession(status: ScrapingSession["status"]) {
+    const category = leadCategories.find((item) => item.id === form.category);
+    const payload = await fetch("/api/scraping-sessions", {
+      body: JSON.stringify({
+        city: form.city,
+        filters: { form, qualificationFilter },
+        niche: category?.label ?? form.category,
+        query: category?.label ?? form.category,
+        requested_limit: Number(form.limit),
+        source: form.source,
+        status,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    }).then((response) => parseJsonResponse<{ session: ScrapingSession }>(response));
+
+    setCurrentSession(payload.session);
+    return payload.session;
+  }
+
+  async function updateSearchSession(sessionId: string, data: Partial<ScrapingSession>) {
+    const payload = await fetch(`/api/scraping-sessions/${sessionId}`, {
+      body: JSON.stringify(data),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    }).then((response) => parseJsonResponse<ScrapingSessionPayload>(response));
+    applySessionPayload(payload);
+    return payload;
+  }
+
+  async function persistSessionResults(sessionId: string, leads: SearchResultLead[]) {
+    const payload = await fetch(`/api/scraping-sessions/${sessionId}/results`, {
+      body: JSON.stringify({ leads }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    }).then((response) => parseJsonResponse<ScrapingSessionPayload>(response));
+    applySessionPayload(payload);
+    return payload;
+  }
+
+  function hasUnsavedTemporaryResults() {
+    return results.some((lead) => !lead.saved);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function handleSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      currentSession &&
+      hasUnsavedTemporaryResults() &&
+      !window.confirm(`Voce tem uma busca anterior com ${results.filter((lead) => !lead.saved).length} resultados nao salvos. Deseja substituir?`)
+    ) {
+      return;
+    }
+
     setIsSearching(true);
     setHasSearched(true);
     setResults([]);
+    setSelectedResultIds(new Set());
 
     try {
       const category = leadCategories.find((item) => item.id === form.category);
@@ -342,6 +561,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       }
 
       const limit = Math.min(Number(form.limit), form.source === "google_places" ? 60 : 100);
+      await createSearchSession("running");
       if (form.source === "apify_google_maps") {
         const started = await fetch("/api/lead-sources/apify/google-maps/start", {
           body: JSON.stringify({ city: form.city, state: form.state, niche: category?.label ?? form.category, limit }),
@@ -442,7 +662,169 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     }
   }
 
+  async function handleSearchWithSession(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (
+      currentSession &&
+      hasUnsavedTemporaryResults() &&
+      !window.confirm(`Voce tem uma busca anterior com ${results.filter((lead) => !lead.saved).length} resultados nao salvos. Deseja substituir?`)
+    ) {
+      return;
+    }
+
+    setIsSearching(true);
+    setHasSearched(true);
+    setResults([]);
+    setSelectedResultIds(new Set());
+
+    let session: ScrapingSession | null = null;
+
+    try {
+      const category = leadCategories.find((item) => item.id === form.category);
+      if (form.source === "google_places" && !googlePlacesEnabled) {
+        throw new Error("Google Places requer chave de API configurada.");
+      }
+
+      const limit = Math.min(Number(form.limit), form.source === "google_places" ? 60 : 100);
+      session = await createSearchSession("running");
+
+      if (form.source === "apify_google_maps") {
+        const started = await fetch("/api/lead-sources/apify/google-maps/start", {
+          body: JSON.stringify({
+            city: form.city,
+            limit,
+            niche: category?.label ?? form.category,
+            sessionId: session.id,
+            state: form.state,
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        }).then((response) =>
+          parseJsonResponse<{ budget: { limit: number; spent: number; estimated: number }; run: { run_id: string } }>(response),
+        );
+
+        await updateSearchSession(session.id, { apify_run_id: started.run.run_id, status: "running" });
+        setQualificationProgress(`Apify em execucao. Orcamento: US$ ${started.budget.spent.toFixed(2)} de US$ ${started.budget.limit.toFixed(2)}; estimativa US$ ${started.budget.estimated.toFixed(2)}.`);
+        toast({
+          title: "Busca Apify iniciada",
+          description: "Voce pode sair desta tela; a busca sera restaurada ao voltar.",
+          variant: "success",
+        });
+        return;
+      }
+
+      const endpointBySource: Record<Exclude<LeadSearchSource, "apify_google_maps">, string> = {
+        cnpj_brasil: "/api/lead-sources/cnpj/search",
+        google_places: "/api/lead-sources/google-places",
+        openstreetmap: "/api/lead-sources/overpass",
+        site_sales: "/api/lead-sources/site-sales/search",
+      };
+      const endpoint = endpointBySource[form.source];
+      const payload =
+        form.source === "cnpj_brasil"
+          ? {
+              city: form.city,
+              limit,
+              onlyWithPhone: form.onlyWithPhone,
+              query: category?.label ?? form.category,
+              state: form.state,
+            }
+          : form.source === "google_places"
+            ? {
+                category: form.category,
+                city: form.city,
+                country: form.country,
+                limit,
+                onlyWithPhone: form.onlyWithPhone,
+                onlyWithWebsite: form.onlyWithWebsite,
+                radiusKm: Number(form.radiusKm),
+                state: form.state,
+              }
+          : form.source === "site_sales"
+            ? {
+                category: form.category,
+                city: form.city,
+                country: form.country,
+                limit,
+                onlyWithPhone: form.onlyWithPhone,
+                onlyWithoutWebsite: form.onlyWithoutWebsite,
+                radiusKm: Number(form.radiusKm),
+                state: form.state,
+              }
+          : {
+              category: form.category,
+              city: form.city,
+              country: form.country,
+              limit,
+              radiusKm: Number(form.radiusKm),
+              state: form.state,
+            };
+
+      const data = await fetch(endpoint, {
+        body: JSON.stringify(payload),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      }).then((response) =>
+        parseJsonResponse<{ results: SearchResultLead[]; warnings?: string[] }>(response),
+      );
+
+      const qualifiedResults = data.results.map((lead) => qualifyLeadAfterScraping(lead));
+      await persistSessionResults(session.id, qualifiedResults);
+      await updateSearchSession(session.id, { results_count: qualifiedResults.length, status: "completed" });
+      setQualificationFilter("all");
+
+      const warnings = data.warnings ?? [];
+      toast({
+        title: "Busca concluida",
+        description:
+          warnings.length > 0
+            ? `${data.results.length} leads encontrados. Aviso: ${warnings[0]}`
+            : `${data.results.length} leads encontrados em ${sourceLabels[form.source]}.`,
+        variant: "success",
+      });
+    } catch (error) {
+      if (session) {
+        await updateSearchSession(session.id, {
+          error_message: error instanceof Error ? error.message : "Tente novamente.",
+          status: "failed",
+        }).catch(() => undefined);
+      }
+      toast({
+        title: "Erro na busca",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
   async function saveLeads(leads: SearchResultLead[]) {
+    const sessionResultIds = leads
+      .map((lead) => lead.sessionResultId)
+      .filter((id): id is string => Boolean(id));
+
+    if (currentSession && sessionResultIds.length > 0) {
+      const data = await fetch(`/api/scraping-sessions/${currentSession.id}/save-leads`, {
+        body: JSON.stringify({ resultIds: sessionResultIds }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      }).then(
+        (response) =>
+          parseJsonResponse<ScrapingSessionPayload & {
+            savedExternalIds: string[];
+            skippedExternalIds: string[];
+          }>(response),
+      );
+
+      applySessionPayload(data);
+      return data;
+    }
+
     const data = await fetch("/api/leads/save", {
       body: JSON.stringify({ leads }),
       headers: {
@@ -544,8 +926,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         );
       }
 
-      setResults((current) =>
-        current.map((lead) => {
+      const updatedResults = results.map((lead) => {
           const update = updates.get(getLeadIdentifier(lead));
 
           return update
@@ -557,8 +938,16 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 rawData: update.rawData,
               }
             : lead;
-        }),
-      );
+        });
+      setResults(updatedResults);
+      if (currentSession) {
+        await fetch(`/api/scraping-sessions/${currentSession.id}/results`, {
+          body: JSON.stringify({ leads: updatedResults.filter((lead) => updates.has(getLeadIdentifier(lead))) }),
+          headers: { "Content-Type": "application/json" },
+          method: "PATCH",
+        }).then((response) => parseJsonResponse<ScrapingSessionPayload>(response))
+          .then(applySessionPayload);
+      }
       toast({
         title: "Qualificacao concluida",
         description: "Busca publica por Instagram, WhatsApp, telefone e email finalizada.",
@@ -626,6 +1015,33 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     }
   }
 
+  async function handleDiscardSession() {
+    if (!currentSession || !window.confirm("Descartar os resultados temporarios desta busca? Leads ja salvos permanecem em Leads.")) {
+      return;
+    }
+
+    setIsDiscardingSession(true);
+
+    try {
+      await fetch(`/api/scraping-sessions/${currentSession.id}`, { method: "DELETE" })
+        .then((response) => parseJsonResponse<{ ok: boolean }>(response));
+      setCurrentSession(null);
+      setResults([]);
+      setSelectedResultIds(new Set());
+      setHasSearched(false);
+      setQualificationProgress("");
+      toast({ title: "Busca temporaria descartada", variant: "success" });
+    } catch (error) {
+      toast({
+        title: "Erro ao descartar busca",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsDiscardingSession(false);
+    }
+  }
+
   function toggleResultSelection(lead: SearchResultLead, checked: boolean) {
     const id = getLeadIdentifier(lead);
 
@@ -640,6 +1056,27 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
       return next;
     });
+
+    if (currentSession && lead.sessionResultId) {
+      void fetch(`/api/scraping-sessions/${currentSession.id}/results`, {
+        body: JSON.stringify({ resultIds: [lead.sessionResultId], selected: checked }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      })
+        .then((response) => parseJsonResponse<ScrapingSessionPayload>(response))
+        .then(({ session }) => {
+          if (session) {
+            setCurrentSession(session);
+          }
+        })
+        .catch(() => {
+          toast({
+            title: "Selecao nao salva",
+            description: "A selecao local foi mantida, mas nao foi sincronizada.",
+            variant: "error",
+          });
+        });
+    }
   }
 
   return (
@@ -670,12 +1107,60 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         </Button>
       </div>
 
+      {isLoadingSession ? (
+        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+          Restaurando ultima busca...
+        </div>
+      ) : currentSession ? (
+        <div className="rounded-lg border border-purple-100 bg-purple-50/70 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-purple-950">
+                  {currentSession.status === "running" ? "Busca em andamento" : "Ultima busca"}
+                </span>
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-purple-700">
+                  Busca salva automaticamente
+                </span>
+                {currentSession.status === "failed" ? (
+                  <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                    Falhou
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-sm leading-6 text-purple-900/80">
+                Os resultados desta busca ficam salvos temporariamente ate voce salvar ou descartar.
+              </p>
+              <p className="mt-1 text-xs text-purple-800/70">
+                {sourceLabels[(currentSession.source as LeadSearchSource)] ?? currentSession.source}
+                {currentSession.city ? ` em ${currentSession.city}` : ""} · {results.filter((lead) => lead.saved).length} salvos / {results.filter((lead) => !lead.saved).length} pendentes
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button onClick={() => void refreshCurrentSession()} type="button" variant="outline">
+                Continuar busca anterior
+              </Button>
+              <Button
+                disabled={isDiscardingSession}
+                onClick={handleDiscardSession}
+                type="button"
+                variant="outline"
+              >
+                {isDiscardingSession ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Descartar busca
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardHeader>
           <CardTitle>Parâmetros da busca</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-12" onSubmit={handleSearch}>
+          <form className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-12" onSubmit={handleSearchWithSession}>
             {canSelectSource ? (
             <div className="grid gap-2 xl:col-span-3">
               <Label htmlFor="source">Fonte de teste</Label>
