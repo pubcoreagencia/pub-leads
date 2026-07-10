@@ -1,6 +1,7 @@
 import { ScraperPageContent } from "@/components/scraper/scraper-page-content";
 import { createClient } from "@/lib/supabase/server";
 import { hasGooglePlacesConfig } from "@/src/lib/lead-sources/google-places";
+import { hasApifyConfig } from "@/src/lib/apify/client";
 import { canSelectLeadSource } from "@/src/lib/permissions/source-permissions";
 
 export default async function ScraperPage() {
@@ -14,6 +15,7 @@ export default async function ScraperPage() {
   return (
     <ScraperPageContent
       canSelectSource={canSelectSource}
+      apifyEnabled={hasApifyConfig()}
       googlePlacesEnabled={hasGooglePlacesConfig()}
     />
   );

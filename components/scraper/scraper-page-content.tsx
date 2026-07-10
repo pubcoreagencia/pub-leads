@@ -29,7 +29,7 @@ import {
 import type { ExternalLead, NormalizedLead } from "@/src/lib/lead-sources/types";
 import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 
-type LeadSearchSource = "site_sales" | "openstreetmap" | "cnpj_brasil" | "google_places";
+type LeadSearchSource = "site_sales" | "openstreetmap" | "cnpj_brasil" | "google_places" | "apify_google_maps";
 type QualificationFilter =
   | "all"
   | "confirmed_whatsapp"
@@ -61,6 +61,7 @@ type SearchFormState = {
 };
 
 type ScraperPageContentProps = {
+  apifyEnabled: boolean;
   canSelectSource: boolean;
   googlePlacesEnabled: boolean;
 };
@@ -81,6 +82,7 @@ const initialForm: SearchFormState = {
 const sourceLabels: Record<LeadSearchSource, string> = {
   cnpj_brasil: "CNPJ Brasil",
   google_places: "Google Places oficial",
+  apify_google_maps: "Apify Google Maps",
   openstreetmap: "OpenStreetMap/Overpass",
   site_sales: "Venda de Sites",
 };
@@ -88,6 +90,7 @@ const sourceLabels: Record<LeadSearchSource, string> = {
 const sourceHints: Record<LeadSearchSource, string> = {
   cnpj_brasil: "Fonte gratuita principal; exige importar os arquivos oficiais da Receita Federal.",
   google_places: "Requer chave da API oficial do Google Maps Platform.",
+  apify_google_maps: "Fonte premium controlada por orçamento mensal e limite de resultados.",
   openstreetmap: "Complemento gratuito com cobertura variavel por cidade.",
   site_sales: "Busca CNPJ + OpenStreetMap, priorizando telefone e ausencia de site.",
 };
@@ -207,7 +210,7 @@ function getWhatsAppHref(lead: SearchResultLead) {
   }
 }
 
-export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: ScraperPageContentProps) {
+export function ScraperPageContent({ apifyEnabled, canSelectSource, googlePlacesEnabled }: ScraperPageContentProps) {
   const [form, setForm] = useState<SearchFormState>(initialForm);
   const [results, setResults] = useState<SearchResultLead[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -296,6 +299,11 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       return;
     }
 
+    if (source === "apify_google_maps" && !apifyEnabled) {
+      toast({ title: "Apify indisponível", description: "Essa fonte requer APIFY_TOKEN configurado no servidor.", variant: "error" });
+      return;
+    }
+
     setForm((current) => ({
       ...current,
       onlyWithPhone: source === "site_sales" ? true : current.onlyWithPhone,
@@ -317,7 +325,28 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       }
 
       const limit = Math.min(Number(form.limit), form.source === "google_places" ? 60 : 100);
-      const endpointBySource: Record<LeadSearchSource, string> = {
+      if (form.source === "apify_google_maps") {
+        const started = await fetch("/api/lead-sources/apify/google-maps/start", {
+          body: JSON.stringify({ city: form.city, state: form.state, niche: category?.label ?? form.category, limit }),
+          headers: { "Content-Type": "application/json" }, method: "POST",
+        }).then((response) => parseJsonResponse<{ budget: { limit: number; spent: number; estimated: number }; run: { run_id: string } }>(response));
+        setQualificationProgress(`Apify em execução. Orçamento: US$ ${started.budget.spent.toFixed(2)} de US$ ${started.budget.limit.toFixed(2)}; estimativa US$ ${started.budget.estimated.toFixed(2)}.`);
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const runState = await fetch(`/api/lead-sources/apify/runs/${started.run.run_id}`).then((response) => parseJsonResponse<{ run: { status: string } }>(response));
+          if (runState.run.status === "failed" || runState.run.status === "aborted") throw new Error("A execução Apify não foi concluída.");
+          if (runState.run.status === "succeeded") {
+            const imported = await fetch(`/api/lead-sources/apify/runs/${started.run.run_id}/import`, { method: "POST" }).then((response) => parseJsonResponse<{ results: SearchResultLead[] }>(response));
+            setResults(imported.results.map((lead) => qualifyLeadAfterScraping(lead)));
+            setQualificationFilter("all"); setQualificationProgress("Dataset Apify importado.");
+            toast({ title: "Busca Apify concluída", description: `${imported.results.length} leads encontrados.`, variant: "success" });
+            return;
+          }
+        }
+        throw new Error("A execução Apify continua em andamento. Tente novamente em alguns instantes.");
+      }
+
+      const endpointBySource: Record<Exclude<LeadSearchSource, "apify_google_maps">, string> = {
         cnpj_brasil: "/api/lead-sources/cnpj/search",
         google_places: "/api/lead-sources/google-places",
         openstreetmap: "/api/lead-sources/overpass",
@@ -644,6 +673,9 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <option value="openstreetmap">OpenStreetMap/Overpass</option>
                 <option disabled={!googlePlacesEnabled} value="google_places">
                   {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
+                </option>
+                <option disabled={!apifyEnabled} value="apify_google_maps">
+                  {apifyEnabled ? "Apify Google Maps (premium)" : "Apify Google Maps (requer token)"}
                 </option>
               </select>
               <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>

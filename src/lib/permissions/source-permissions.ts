@@ -7,7 +7,8 @@ export type LeadSearchSourceId =
   | "site_sales"
   | "openstreetmap"
   | "cnpj_brasil"
-  | "google_places";
+  | "google_places"
+  | "apify_google_maps";
 
 type SourcePermissionUser = {
   email?: string | null;

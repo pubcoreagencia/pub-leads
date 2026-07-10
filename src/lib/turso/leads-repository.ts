@@ -193,6 +193,9 @@ export async function findDuplicateLead(userId: string, data: Partial<LeadWriteI
   const cnpj = cleanString(data.cnpj);
   const phone = cleanString(data.phone);
   const phone2 = cleanString(data.phone_2);
+  const website = cleanString(data.website);
+  const name = cleanString(data.name);
+  const city = cleanString(data.city);
 
   if (source && sourcePlaceId) {
     const bySource = await queryLead(
@@ -214,6 +217,22 @@ export async function findDuplicateLead(userId: string, data: Partial<LeadWriteI
     if (byCnpj) {
       return byCnpj;
     }
+  }
+
+  if (website) {
+    const byWebsite = await queryLead(
+      `${selectLeadSql} where user_id = ? and lower(coalesce(website, '')) = lower(?) limit 1`,
+      [userId, website],
+    );
+    if (byWebsite) return byWebsite;
+  }
+
+  if (name && city) {
+    const byNameAndCity = await queryLead(
+      `${selectLeadSql} where user_id = ? and lower(name) = lower(?) and lower(coalesce(city, '')) = lower(?) limit 1`,
+      [userId, name, city],
+    );
+    if (byNameAndCity) return byNameAndCity;
   }
 
   const phoneValue = phone ?? phone2;

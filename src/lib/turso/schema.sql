@@ -77,6 +77,24 @@ create table if not exists search_logs (
   created_at text not null default current_timestamp
 );
 
+create table if not exists apify_runs (
+  id text primary key,
+  user_id text not null,
+  actor_id text not null,
+  run_id text not null unique,
+  dataset_id text,
+  source_type text not null,
+  city text,
+  niche text,
+  status text not null default 'pending',
+  requested_limit integer not null default 0,
+  results_count integer not null default 0,
+  estimated_cost_usd real not null default 0,
+  started_at text not null default current_timestamp,
+  finished_at text,
+  metadata text not null default '{}'
+);
+
 create table if not exists cnpj_establishments (
   cnpj text primary key,
   cnpj_basico text,
@@ -126,6 +144,7 @@ create index if not exists lead_notes_user_lead_idx on lead_notes(user_id, lead_
 create index if not exists lead_messages_user_lead_idx on lead_messages(user_id, lead_id);
 create index if not exists search_logs_user_created_at_idx on search_logs(user_id, created_at);
 create index if not exists search_logs_user_source_idx on search_logs(user_id, source);
+create index if not exists apify_runs_user_started_idx on apify_runs(user_id, started_at);
 create index if not exists cnpj_establishments_uf_municipio_idx on cnpj_establishments(uf, municipio);
 create index if not exists cnpj_establishments_cnae_idx on cnpj_establishments(cnae_fiscal);
 create index if not exists cnpj_establishments_phone_idx on cnpj_establishments(telefone_1, telefone_2);
