@@ -34,6 +34,7 @@ const defaultValues: LeadFormValues = {
   phone: "",
   whatsapp: "",
   email: "",
+  instagram: "",
   website: "",
   address: "",
   city: "",
@@ -42,6 +43,21 @@ const defaultValues: LeadFormValues = {
   status: "new",
   source: "manual",
 };
+
+function readInstagramValue(lead: Lead) {
+  const handle = typeof lead.metadata.instagram_handle === "string" ? lead.metadata.instagram_handle.trim() : "";
+  const url = typeof lead.metadata.instagram_url === "string" ? lead.metadata.instagram_url.trim() : "";
+
+  if (handle) {
+    return handle.startsWith("@") ? handle : `@${handle}`;
+  }
+
+  if (url) {
+    return url;
+  }
+
+  return "";
+}
 
 function leadToFormValues(lead: Lead | null): LeadFormValues {
   if (!lead) {
@@ -55,6 +71,7 @@ function leadToFormValues(lead: Lead | null): LeadFormValues {
     phone: lead.phone ?? "",
     whatsapp: lead.whatsapp ?? "",
     email: lead.email ?? "",
+    instagram: readInstagramValue(lead),
     website: lead.website ?? "",
     address: lead.address ?? "",
     city: lead.city ?? "",
@@ -254,6 +271,11 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
                 <Label htmlFor="email">Email</Label>
                 <Input id="email" placeholder="email@empresa.com" {...register("email")} />
                 {errors.email ? <p className="text-sm text-red-600">{errors.email.message}</p> : null}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="instagram">Instagram</Label>
+                <Input id="instagram" placeholder="@empresa ou URL do perfil" {...register("instagram")} />
               </div>
 
               <div className="grid gap-2">

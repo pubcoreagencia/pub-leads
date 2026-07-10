@@ -4,8 +4,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { LeadFormValues } from "@/schemas/lead";
 import { leadFormSchema, leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
+import { extractInstagramFromTextOrUrl } from "@/src/lib/lead-qualification/qualifier";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { createLead, deleteLeads, listLeads } from "@/src/lib/turso/leads-repository";
+import type { JsonRecord } from "@/src/lib/turso/types";
 import type { LeadWriteInput } from "@/src/lib/turso/types";
 
 const listSchema = z.object({
@@ -31,6 +33,42 @@ function cleanOptional(value: string | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function normalizeInstagramProfile(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const found = extractInstagramFromTextOrUrl(value);
+
+  if (found) {
+    return found;
+  }
+
+  const handle = value.replace(/^@/, "").trim();
+
+  if (!/^[A-Za-z0-9._]{2,30}$/.test(handle)) {
+    return null;
+  }
+
+  return { handle, url: `https://www.instagram.com/${handle}/` };
+}
+
+function withManualInstagram(rawData: JsonRecord, value: string | undefined) {
+  const instagram = normalizeInstagramProfile(cleanOptional(value));
+
+  if (!instagram) {
+    return rawData;
+  }
+
+  return {
+    ...rawData,
+    instagram_checked_at: new Date().toISOString(),
+    instagram_handle: instagram.handle,
+    instagram_source: "manual",
+    instagram_url: instagram.url,
+  };
+}
+
 function formToLeadInput(values: LeadFormValues): LeadWriteInput {
   const phone = cleanOptional(values.phone);
   const whatsapp = cleanOptional(values.whatsapp);
@@ -46,7 +84,7 @@ function formToLeadInput(values: LeadFormValues): LeadWriteInput {
     name: values.name.trim(),
     phone,
     phone_2: null,
-    raw_data: {},
+    raw_data: withManualInstagram({}, values.instagram),
     source: values.source,
     state: cleanOptional(values.state),
     status: values.status,

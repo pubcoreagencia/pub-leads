@@ -32,6 +32,7 @@ export const leadFormSchema = z.object({
     .refine((value) => !value || z.string().email().safeParse(value).success, {
       message: "Informe um email valido.",
     }),
+  instagram: z.string().trim().optional(),
   website: z.string().trim().optional(),
   address: z.string().trim().optional(),
   city: z.string().trim().optional(),

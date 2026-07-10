@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import type { LeadFormValues } from "@/schemas/lead";
+import type { Lead, LeadFormValues } from "@/schemas/lead";
 import { leadFormSchema } from "@/schemas/lead";
+import { extractInstagramFromTextOrUrl } from "@/src/lib/lead-qualification/qualifier";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { deleteLead, getLeadById, updateLead } from "@/src/lib/turso/leads-repository";
-import type { LeadUpdateInput } from "@/src/lib/turso/types";
+import type { JsonRecord, LeadUpdateInput } from "@/src/lib/turso/types";
 
 const paramsSchema = z.object({
   leadId: z.string().uuid(),
@@ -18,7 +19,48 @@ function cleanOptional(value: string | undefined) {
   return trimmed ? trimmed : null;
 }
 
-function formToLeadUpdate(values: LeadFormValues): LeadUpdateInput {
+function normalizeInstagramProfile(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const found = extractInstagramFromTextOrUrl(value);
+
+  if (found) {
+    return found;
+  }
+
+  const handle = value.replace(/^@/, "").trim();
+
+  if (!/^[A-Za-z0-9._]{2,30}$/.test(handle)) {
+    return null;
+  }
+
+  return { handle, url: `https://www.instagram.com/${handle}/` };
+}
+
+function withManualInstagram(rawData: JsonRecord, value: string | undefined) {
+  const instagram = normalizeInstagramProfile(cleanOptional(value));
+  const next: JsonRecord = { ...rawData };
+
+  if (!instagram) {
+    delete next.instagram_checked_at;
+    delete next.instagram_handle;
+    delete next.instagram_source;
+    delete next.instagram_url;
+    return next;
+  }
+
+  return {
+    ...next,
+    instagram_checked_at: new Date().toISOString(),
+    instagram_handle: instagram.handle,
+    instagram_source: "manual",
+    instagram_url: instagram.url,
+  };
+}
+
+function formToLeadUpdate(values: LeadFormValues, currentLead: Lead): LeadUpdateInput {
   const phone = cleanOptional(values.phone);
   const whatsapp = cleanOptional(values.whatsapp);
 
@@ -32,6 +74,7 @@ function formToLeadUpdate(values: LeadFormValues): LeadUpdateInput {
     name: values.name.trim(),
     phone,
     phone_2: null,
+    raw_data: withManualInstagram(currentLead.metadata, values.instagram),
     source: values.source,
     state: cleanOptional(values.state),
     status: values.status,
@@ -100,7 +143,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ leadI
     return NextResponse.json({ error: "Lead invalido." }, { status: 400 });
   }
 
-  const lead = await updateLead(userId, parsedParams.data.leadId, formToLeadUpdate(parsedBody.data));
+  const currentLead = await getLeadById(userId, parsedParams.data.leadId);
+
+  if (!currentLead) {
+    return NextResponse.json({ error: "Lead nao encontrado." }, { status: 404 });
+  }
+
+  const lead = await updateLead(userId, parsedParams.data.leadId, formToLeadUpdate(parsedBody.data, currentLead));
 
   if (!lead) {
     return NextResponse.json({ error: "Lead nao encontrado." }, { status: 404 });

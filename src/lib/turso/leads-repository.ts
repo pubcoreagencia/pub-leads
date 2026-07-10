@@ -379,12 +379,14 @@ export async function updateLead(userId: string, leadId: string, data: LeadUpdat
     return null;
   }
 
-  const contactFieldsChanged = ["phone", "phone_2", "whatsapp", "website"].some((field) => field in data);
+  const contactFieldsChanged = ["phone", "phone_2", "whatsapp", "website", "raw_data"].some((field) => field in data);
+  const nextRawData =
+    typeof data.raw_data === "string" ? parseJsonRecord(data.raw_data) : data.raw_data ?? current.metadata;
   const classified = contactFieldsChanged
     ? qualifyLeadAfterScraping({
         phone: data.phone ?? current.phone,
         phone2: data.phone_2 ?? current.phone_2,
-        rawData: current.metadata,
+        rawData: nextRawData,
         website: data.website ?? current.website,
         whatsapp: data.whatsapp ?? current.whatsapp,
       })
