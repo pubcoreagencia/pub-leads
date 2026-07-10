@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Check,
@@ -61,9 +61,15 @@ type SearchFormState = {
 };
 
 type ScraperPageContentProps = {
-  apifyEnabled: boolean;
   canSelectSource: boolean;
   googlePlacesEnabled: boolean;
+};
+
+type ApifyAvailability = {
+  available: boolean;
+  monthlyBudgetUsd?: number;
+  reason?: "missing_token" | "not_internal_user" | "budget_exceeded" | "ok";
+  usedBudgetUsd?: number;
 };
 
 const initialForm: SearchFormState = {
@@ -210,7 +216,7 @@ function getWhatsAppHref(lead: SearchResultLead) {
   }
 }
 
-export function ScraperPageContent({ apifyEnabled, canSelectSource, googlePlacesEnabled }: ScraperPageContentProps) {
+export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: ScraperPageContentProps) {
   const [form, setForm] = useState<SearchFormState>(initialForm);
   const [results, setResults] = useState<SearchResultLead[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -221,6 +227,17 @@ export function ScraperPageContent({ apifyEnabled, canSelectSource, googlePlaces
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
+  const [apifyAvailability, setApifyAvailability] = useState<ApifyAvailability>({ available: false });
+  const apifyEnabled = apifyAvailability.available;
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/lead-sources/apify/status")
+      .then(async (response) => ({ payload: await response.json() as ApifyAvailability, response }))
+      .then(({ payload }) => { if (active) setApifyAvailability(payload); })
+      .catch(() => { if (active) setApifyAvailability({ available: false, reason: "missing_token" }); });
+    return () => { active = false; };
+  }, []);
 
   const visibleResults = useMemo(
     () =>
@@ -675,10 +692,15 @@ export function ScraperPageContent({ apifyEnabled, canSelectSource, googlePlaces
                   {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
                 </option>
                 <option disabled={!apifyEnabled} value="apify_google_maps">
-                  {apifyEnabled ? "Apify Google Maps (premium)" : "Apify Google Maps (requer token)"}
+                  {apifyEnabled ? "Apify Google Maps (premium)" : apifyAvailability.reason === "budget_exceeded" ? "Apify Google Maps (orçamento atingido)" : "Apify Google Maps (indisponível)"}
                 </option>
               </select>
               <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
+              {apifyAvailability.monthlyBudgetUsd !== undefined ? (
+                <p className="text-xs leading-5 text-slate-500">
+                  Apify: US$ {(apifyAvailability.usedBudgetUsd ?? 0).toFixed(2)} de US$ {apifyAvailability.monthlyBudgetUsd.toFixed(2)} usados neste mês.
+                </p>
+              ) : null}
               {!googlePlacesEnabled ? (
                 <p className="sr-only">
                   Google Places está desativado nesta instalação até a chave ser configurada.
