@@ -1,9 +1,9 @@
 import {
   extractInstagramFromTextOrUrl,
-  normalizeBrazilianPhone,
   type InstagramStatus,
   type WhatsappStatus,
 } from "@/src/lib/lead-qualification/qualifier";
+import { getWhatsappCandidate, normalizeBrazilPhone } from "@/src/lib/lead-qualification/phone-normalization";
 
 export type ContactEnrichmentResult = {
   email: string | null;
@@ -122,7 +122,7 @@ function getSafeInternalLinks(html: string, baseUrl: URL) {
   const links = getHrefLinks(html, baseUrl)
     .filter((url) => url.hostname === baseUrl.hostname)
     .filter((url) => contactPathPattern.test(url.pathname))
-    .slice(0, 3);
+    .slice(0, 2);
 
   return Array.from(new Map(links.map((url) => [url.toString(), url])).values());
 }
@@ -141,7 +141,7 @@ function extractPhone(html: string) {
   const matches = html.match(/(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\s*)?\d{4}[-.\s]?\d{4}/g) ?? [];
 
   for (const match of matches) {
-    const normalized = normalizeBrazilianPhone(match);
+    const normalized = normalizeBrazilPhone(match);
 
     if (normalized) {
       return normalized;
@@ -153,11 +153,11 @@ function extractPhone(html: string) {
 
 function extractWhatsAppPhone(url: URL) {
   if (/wa\.me$/i.test(url.hostname)) {
-    return normalizeBrazilianPhone(url.pathname.replace(/\D/g, ""));
+    return getWhatsappCandidate(url.pathname.replace(/\D/g, ""));
   }
 
   if (/whatsapp\.com$/i.test(url.hostname) || /whatsapp\.com$/i.test(url.hostname.replace(/^www\./, ""))) {
-    return normalizeBrazilianPhone(url.searchParams.get("phone"));
+    return getWhatsappCandidate(url.searchParams.get("phone"));
   }
 
   return null;

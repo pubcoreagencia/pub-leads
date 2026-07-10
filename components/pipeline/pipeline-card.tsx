@@ -15,9 +15,10 @@ type PipelineCardProps = {
 
 export function PipelineCard({ lead }: PipelineCardProps) {
   const qualification = getLeadQualification(lead);
-  const phone = lead.whatsapp || lead.phone || lead.phone_2;
-  const phoneDigits = phone?.replace(/\D/g, "") ?? "";
-  const whatsappUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
+  const whatsappUrl =
+    qualification.whatsapp_status === "confirmed" || qualification.whatsapp_status === "possible"
+      ? `https://wa.me/${qualification.normalized_whatsapp}`
+      : null;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: {
@@ -75,9 +76,11 @@ export function PipelineCard({ lead }: PipelineCardProps) {
               "inline-flex items-center gap-1 rounded-full px-2 py-1 font-medium",
               qualification.whatsapp_status === "confirmed"
                 ? "bg-emerald-50 text-emerald-700"
-                : qualification.whatsapp_status === "possible"
-                  ? "bg-blue-50 text-blue-700"
-                  : "bg-slate-100 text-slate-600",
+              : qualification.whatsapp_status === "possible"
+                ? "bg-blue-50 text-blue-700"
+                : qualification.whatsapp_status === "landline"
+                  ? "bg-amber-50 text-amber-800"
+                : "bg-slate-100 text-slate-600",
             )}
           >
             <MessageCircle className="h-3 w-3" />
@@ -85,6 +88,8 @@ export function PipelineCard({ lead }: PipelineCardProps) {
               ? "WhatsApp"
               : qualification.whatsapp_status === "possible"
                 ? "Possivel WhatsApp"
+                : qualification.whatsapp_status === "landline"
+                  ? "Telefone fixo"
                 : "Sem WhatsApp"}
           </span>
           <span

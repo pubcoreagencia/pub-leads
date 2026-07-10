@@ -56,6 +56,19 @@ export function stringifyJson(value: JsonRecord | string | null | undefined) {
   return JSON.stringify(value ?? {});
 }
 
+function parseStringArray(value: string | null) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function rowToTursoLead(row: Row | Record<string, unknown>): TursoLeadRow {
   return {
     address: nullableString(valueOf(row, "address")),
@@ -77,6 +90,10 @@ export function rowToTursoLead(row: Row | Record<string, unknown>): TursoLeadRow
     name: String(valueOf(row, "name")),
     phone: nullableString(valueOf(row, "phone")),
     phone_2: nullableString(valueOf(row, "phone_2")),
+    normalized_phone: nullableString(valueOf(row, "normalized_phone")),
+    normalized_whatsapp: nullableString(valueOf(row, "normalized_whatsapp")),
+    phone_type: (nullableString(valueOf(row, "phone_type")) ?? "unknown") as TursoLeadRow["phone_type"],
+    qualification_tags: nullableString(valueOf(row, "qualification_tags")),
     rating: nullableNumber(valueOf(row, "rating")),
     raw_cnpj_data: nullableString(valueOf(row, "raw_cnpj_data")),
     raw_data: nullableString(valueOf(row, "raw_data")),
@@ -89,6 +106,11 @@ export function rowToTursoLead(row: Row | Record<string, unknown>): TursoLeadRow
     status: String(valueOf(row, "status")) as LeadStatus,
     updated_at: String(valueOf(row, "updated_at")),
     user_id: String(valueOf(row, "user_id")),
+    whatsapp: nullableString(valueOf(row, "whatsapp")),
+    whatsapp_checked_at: nullableString(valueOf(row, "whatsapp_checked_at")),
+    whatsapp_confidence: nullableNumber(valueOf(row, "whatsapp_confidence")),
+    whatsapp_status: (nullableString(valueOf(row, "whatsapp_status")) ?? "unknown") as TursoLeadRow["whatsapp_status"],
+    whatsapp_validation_source: nullableString(valueOf(row, "whatsapp_validation_source")),
     website: nullableString(valueOf(row, "website")),
   };
 }
@@ -120,6 +142,9 @@ export function rowToLead(row: Row | Record<string, unknown>): Lead {
     name: lead.name,
     phone: lead.phone,
     phone_2: lead.phone_2,
+    normalized_phone: lead.normalized_phone,
+    normalized_whatsapp: lead.normalized_whatsapp,
+    phone_type: lead.phone_type,
     pipeline_stage: lead.status,
     raw_cnpj_data: parseNullableJsonRecord(lead.raw_cnpj_data),
     source: lead.source ?? "manual",
@@ -128,7 +153,12 @@ export function rowToLead(row: Row | Record<string, unknown>): Lead {
     updated_at: lead.updated_at,
     user_id: lead.user_id,
     website: lead.website,
-    whatsapp: lead.phone,
+    whatsapp: lead.whatsapp,
+    whatsapp_checked_at: lead.whatsapp_checked_at,
+    whatsapp_confidence: lead.whatsapp_confidence,
+    whatsapp_status: lead.whatsapp_status,
+    whatsapp_validation_source: lead.whatsapp_validation_source,
+    qualification_tags: parseStringArray(lead.qualification_tags),
   };
 }
 

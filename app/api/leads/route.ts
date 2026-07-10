@@ -44,13 +44,14 @@ function formToLeadInput(values: LeadFormValues): LeadWriteInput {
     email: cleanOptional(values.email),
     fantasy_name: null,
     name: values.name.trim(),
-    phone: phone ?? whatsapp,
-    phone_2: phone && whatsapp && phone !== whatsapp ? whatsapp : null,
+    phone,
+    phone_2: null,
     raw_data: {},
     source: values.source,
     state: cleanOptional(values.state),
     status: values.status,
     website: cleanOptional(values.website),
+    whatsapp,
   };
 }
 

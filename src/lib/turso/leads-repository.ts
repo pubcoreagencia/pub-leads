@@ -1,8 +1,9 @@
 import type { InValue } from "@libsql/client";
 
 import type { Lead, LeadSource, LeadStatus } from "@/schemas/lead";
+import { qualifyLeadAfterScraping } from "@/src/lib/lead-qualification/qualifier";
 import { getTursoClient } from "@/src/lib/turso/client";
-import { rowToLead, rowToTursoLead, stringifyJson } from "@/src/lib/turso/mappers";
+import { parseJsonRecord, rowToLead, rowToTursoLead, stringifyJson } from "@/src/lib/turso/mappers";
 import type {
   CountPoint,
   CreateManyLeadsResult,
@@ -23,6 +24,15 @@ const leadColumns = [
   "cnae_description",
   "phone",
   "phone_2",
+  "whatsapp",
+  "phone_type",
+  "normalized_phone",
+  "normalized_whatsapp",
+  "whatsapp_status",
+  "whatsapp_confidence",
+  "whatsapp_validation_source",
+  "whatsapp_checked_at",
+  "qualification_tags",
   "email",
   "website",
   "address",
@@ -56,6 +66,15 @@ const mutableColumns = [
   "cnae_description",
   "phone",
   "phone_2",
+  "whatsapp",
+  "phone_type",
+  "normalized_phone",
+  "normalized_whatsapp",
+  "whatsapp_status",
+  "whatsapp_confidence",
+  "whatsapp_validation_source",
+  "whatsapp_checked_at",
+  "qualification_tags",
   "email",
   "website",
   "address",
@@ -99,6 +118,15 @@ function normalizeNullableJson(value: LeadWriteInput["raw_cnpj_data"]) {
 
 function normalizeLeadInput(userId: string, data: LeadWriteInput) {
   const now = new Date().toISOString();
+  const metadata = typeof data.raw_data === "string" ? parseJsonRecord(data.raw_data) : data.raw_data ?? {};
+  const classified = qualifyLeadAfterScraping({
+    phone: data.phone,
+    phone2: data.phone_2,
+    rawData: metadata,
+    whatsapp: data.whatsapp,
+    website: data.website,
+  });
+  const qualification = classified.qualification;
 
   return {
     address: cleanString(data.address),
@@ -120,9 +148,18 @@ function normalizeLeadInput(userId: string, data: LeadWriteInput) {
     name: data.name.trim(),
     phone: cleanString(data.phone),
     phone_2: cleanString(data.phone_2),
+    whatsapp: qualification.whatsapp_status === "confirmed" || qualification.whatsapp_status === "possible" ? qualification.normalized_whatsapp : null,
+    phone_type: qualification.phone_type,
+    normalized_phone: qualification.normalized_phone,
+    normalized_whatsapp: qualification.normalized_whatsapp,
+    whatsapp_status: qualification.whatsapp_status,
+    whatsapp_confidence: qualification.whatsapp_confidence,
+    whatsapp_validation_source: qualification.whatsapp_validation_source,
+    whatsapp_checked_at: qualification.whatsapp_checked_at,
+    qualification_tags: JSON.stringify(qualification.qualification_tags),
     rating: data.rating ?? null,
     raw_cnpj_data: normalizeNullableJson(data.raw_cnpj_data),
-    raw_data: normalizeJson(data.raw_data),
+    raw_data: normalizeJson(classified.rawData),
     reviews_count: data.reviews_count ?? null,
     score: data.score ?? 0,
     source: data.source ?? "manual",
@@ -280,7 +317,7 @@ export async function listLeads(userId: string, filters: LeadListFilters = {}) {
 
   if (filters.qualification === "without_whatsapp") {
     clauses.push(
-      "(raw_data like '%whatsapp_status%missing%' or raw_data like '%whatsapp_status%invalid%')",
+      "(whatsapp_status in ('landline', 'missing', 'invalid') or raw_data like '%whatsapp_status%landline%' or raw_data like '%whatsapp_status%missing%' or raw_data like '%whatsapp_status%invalid%')",
     );
   }
 
@@ -317,15 +354,50 @@ export async function getLeadById(userId: string, leadId: string) {
 }
 
 export async function updateLead(userId: string, leadId: string, data: LeadUpdateInput) {
+  const current = await getLeadById(userId, leadId);
+
+  if (!current) {
+    return null;
+  }
+
+  const contactFieldsChanged = ["phone", "phone_2", "whatsapp", "website"].some((field) => field in data);
+  const classified = contactFieldsChanged
+    ? qualifyLeadAfterScraping({
+        phone: data.phone ?? current.phone,
+        phone2: data.phone_2 ?? current.phone_2,
+        rawData: current.metadata,
+        website: data.website ?? current.website,
+        whatsapp: data.whatsapp ?? current.whatsapp,
+      })
+    : null;
+  const updateData: LeadUpdateInput = classified
+    ? {
+        ...data,
+        normalized_phone: classified.qualification.normalized_phone,
+        normalized_whatsapp: classified.qualification.normalized_whatsapp,
+        phone_type: classified.qualification.phone_type,
+        qualification_tags: JSON.stringify(classified.qualification.qualification_tags),
+        raw_data: classified.rawData,
+        whatsapp:
+          classified.qualification.whatsapp_status === "confirmed" ||
+          classified.qualification.whatsapp_status === "possible"
+            ? classified.qualification.normalized_whatsapp
+            : null,
+        whatsapp_checked_at: classified.qualification.whatsapp_checked_at,
+        whatsapp_confidence: classified.qualification.whatsapp_confidence,
+        whatsapp_status: classified.qualification.whatsapp_status,
+        whatsapp_validation_source: classified.qualification.whatsapp_validation_source,
+      }
+    : data;
   const sets: string[] = [];
   const args: InValue[] = [];
 
   for (const column of mutableColumns) {
-    if (!(column in data)) {
+    if (!(column in updateData)) {
       continue;
     }
 
-    const value = data[column];
+    const value = updateData[column];
     sets.push(`${column} = ?`);
 
     if (column === "raw_data") {

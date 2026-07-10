@@ -56,7 +56,7 @@ export async function POST(request: Request) {
     variantSeed,
   });
   const message = diversification.message;
-  const phone = lead.whatsapp || lead.phone || "";
+  const phone = lead.whatsapp || "";
   const waLink = phone
     ? manualWhatsAppProvider.createMessageLink({ phone, message })
     : null;

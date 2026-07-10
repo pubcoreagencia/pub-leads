@@ -32,7 +32,9 @@ import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 type LeadSearchSource = "site_sales" | "openstreetmap" | "cnpj_brasil" | "google_places";
 type QualificationFilter =
   | "all"
+  | "confirmed_whatsapp"
   | "possible_whatsapp"
+  | "landline"
   | "missing_whatsapp"
   | "with_instagram"
   | "missing_instagram"
@@ -93,6 +95,8 @@ const sourceHints: Record<LeadSearchSource, string> = {
 const qualificationFilterLabels: Record<QualificationFilter, string> = {
   all: "Todos",
   best: "Melhores qualificados",
+  confirmed_whatsapp: "WhatsApp confirmado",
+  landline: "Telefone fixo",
   missing_whatsapp: "Sem WhatsApp",
   missing_instagram: "Sem Instagram",
   possible_whatsapp: "Com possivel WhatsApp",
@@ -125,6 +129,13 @@ function whatsappBadge(qualification: LeadQualification) {
     return {
       className: "bg-blue-50 text-blue-700",
       label: "Possivel WhatsApp",
+    };
+  }
+
+  if (qualification.whatsapp_status === "landline") {
+    return {
+      className: "bg-amber-50 text-amber-800",
+      label: "Telefone fixo",
     };
   }
 
@@ -177,7 +188,13 @@ function getContactPhone(lead: SearchResultLead) {
 }
 
 function getWhatsAppHref(lead: SearchResultLead) {
-  const phone = getContactPhone(lead);
+  const qualification = getLeadQualification(lead);
+
+  if (!["confirmed", "possible"].includes(qualification.whatsapp_status)) {
+    return null;
+  }
+
+  const phone = qualification.normalized_whatsapp;
 
   if (!phone) {
     return null;
@@ -208,7 +225,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         const qualification = getLeadQualification(lead);
 
         if (qualificationFilter === "possible_whatsapp") {
-          return qualification.whatsapp_status === "possible" || qualification.whatsapp_status === "confirmed";
+          return qualification.whatsapp_status === "possible";
+        }
+
+        if (qualificationFilter === "confirmed_whatsapp") {
+          return qualification.whatsapp_status === "confirmed";
+        }
+
+        if (qualificationFilter === "landline") {
+          return qualification.whatsapp_status === "landline";
         }
 
         if (qualificationFilter === "missing_whatsapp") {
@@ -604,9 +629,9 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           <CardTitle>Parâmetros da busca</CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleSearch}>
+          <form className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-12" onSubmit={handleSearch}>
             {canSelectSource ? (
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-3">
               <Label htmlFor="source">Fonte de teste</Label>
               <select
                 className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
@@ -623,13 +648,13 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </select>
               <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
               {!googlePlacesEnabled ? (
-                <p className="text-xs leading-5 text-amber-700">
+                <p className="sr-only">
                   Google Places está desativado nesta instalação até a chave ser configurada.
                 </p>
               ) : null}
             </div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid gap-2 xl:col-span-3">
                 <Label>Fonte da busca</Label>
                 <div className="flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
                   Venda de Sites
@@ -640,7 +665,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </div>
             )}
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-3">
               <Label htmlFor="city">Cidade</Label>
               <Input
                 id="city"
@@ -651,7 +676,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="state">Estado</Label>
               <Input
                 id="state"
@@ -662,7 +687,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="country">Pais</Label>
               <Input
                 disabled={form.source === "cnpj_brasil"}
@@ -674,7 +699,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="category">Categoria</Label>
               <select
                 className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
@@ -690,7 +715,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </select>
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="radiusKm">Raio em km</Label>
               <Input
                 disabled={form.source === "cnpj_brasil"}
@@ -704,7 +729,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               />
             </div>
 
-            <div className="grid gap-2">
+            <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="limit">Limite de resultados</Label>
               <Input
                 id="limit"
@@ -718,7 +743,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             </div>
 
             {form.source === "site_sales" ? (
-              <div className="grid gap-2 self-end md:grid-cols-2 xl:col-span-2">
+              <div className="grid gap-2 self-end md:grid-cols-2 xl:col-span-4">
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithPhone}
@@ -741,7 +766,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             ) : null}
 
             {form.source === "google_places" ? (
-              <div className="grid gap-2 self-end md:grid-cols-2 xl:col-span-2">
+              <div className="grid gap-2 self-end md:grid-cols-2 xl:col-span-4">
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithPhone}
@@ -764,7 +789,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             ) : null}
 
             {form.source === "cnpj_brasil" ? (
-              <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
+              <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600 xl:col-span-4">
                 <input
                   checked={form.onlyWithPhone}
                   className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
@@ -775,7 +800,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </label>
             ) : null}
 
-            <div className="md:col-span-2 xl:col-span-6">
+            <div className="flex items-end xl:col-span-2 xl:justify-end">
               <Button disabled={isSearching} type="submit">
                 {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {form.source === "google_places"

@@ -13,6 +13,7 @@
     "turso:migrate:cnpj": "tsx scripts/migrate-cnpj-supabase-to-turso.ts",
     "turso:verify:cnpj": "tsx scripts/verify-cnpj-turso-migration.ts",
     "plans:grant-internal": "tsx scripts/grant-internal-unlimited-plan.ts",
+    "leads:fix-whatsapp-qualification": "tsx scripts/fix-whatsapp-qualification.ts",
     "test": "echo \"No tests configured yet\""
   },
   "dependencies": {

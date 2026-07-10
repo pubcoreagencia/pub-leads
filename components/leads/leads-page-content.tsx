@@ -83,7 +83,13 @@ function getWebsiteHref(website: string | null) {
 }
 
 function getWhatsAppHref(lead: Lead) {
-  const phone = getContactPhone(lead);
+  const qualification = getLeadQualification(lead);
+
+  if (!["confirmed", "possible"].includes(qualification.whatsapp_status)) {
+    return null;
+  }
+
+  const phone = qualification.normalized_whatsapp;
 
   if (!phone) {
     return null;
@@ -109,6 +115,10 @@ function whatsappBadge(qualification: LeadQualification) {
 
   if (qualification.whatsapp_status === "possible") {
     return { className: "bg-blue-50 text-blue-700", label: "Possivel WhatsApp" };
+  }
+
+  if (qualification.whatsapp_status === "landline") {
+    return { className: "bg-amber-50 text-amber-800", label: "Telefone fixo" };
   }
 
   if (qualification.whatsapp_status === "invalid") {

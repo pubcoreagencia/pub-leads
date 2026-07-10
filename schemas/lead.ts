@@ -61,6 +61,14 @@ export type Lead = {
   phone: string | null;
   phone_2: string | null;
   whatsapp: string | null;
+  phone_type: "mobile" | "landline" | "invalid" | "unknown" | "missing";
+  normalized_phone: string | null;
+  normalized_whatsapp: string | null;
+  whatsapp_status: "confirmed" | "possible" | "landline" | "missing" | "invalid" | "unknown";
+  whatsapp_confidence: number | null;
+  whatsapp_validation_source: string | null;
+  whatsapp_checked_at: string | null;
+  qualification_tags: string[];
   email: string | null;
   website: string | null;
   address: string | null;

@@ -77,7 +77,8 @@ export async function POST(request: Request) {
       : contact.instagram_status === "unknown"
         ? base.instagram_status
         : contact.instagram_status;
-    const whatsappStatus = contact.whatsapp_status === "confirmed" ? "confirmed" : base.whatsapp_status;
+    const whatsappStatus: LeadQualification["whatsapp_status"] =
+      contact.whatsapp_status === "confirmed" ? "confirmed" : base.whatsapp_status;
     const qualificationWithoutScore = {
       ...base,
       instagram_checked_at: contact.instagram_checked_at ?? base.instagram_checked_at,

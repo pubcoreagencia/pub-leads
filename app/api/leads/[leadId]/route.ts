@@ -30,12 +30,13 @@ function formToLeadUpdate(values: LeadFormValues): LeadUpdateInput {
     country: cleanOptional(values.country),
     email: cleanOptional(values.email),
     name: values.name.trim(),
-    phone: phone ?? whatsapp,
-    phone_2: phone && whatsapp && phone !== whatsapp ? whatsapp : null,
+    phone,
+    phone_2: null,
     source: values.source,
     state: cleanOptional(values.state),
     status: values.status,
     website: cleanOptional(values.website),
+    whatsapp,
   };
 }
 

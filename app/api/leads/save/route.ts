@@ -20,8 +20,13 @@ const qualificationSchema = z
     instagram_url: nullableStringSchema,
     qualification_score: z.number().int().nullable().optional(),
     qualification_tags: z.array(z.string()).optional(),
+    phone_type: z.enum(["mobile", "landline", "invalid", "unknown", "missing"]).optional(),
+    normalized_phone: nullableStringSchema,
+    normalized_whatsapp: nullableStringSchema,
+    whatsapp_confidence: z.number().int().min(0).max(100).optional(),
+    whatsapp_validation_source: z.string().optional(),
     whatsapp_checked_at: z.string().optional(),
-    whatsapp_status: z.enum(["confirmed", "possible", "missing", "invalid", "unknown"]),
+    whatsapp_status: z.enum(["confirmed", "possible", "landline", "missing", "invalid", "unknown"]),
   })
   .passthrough();
 

@@ -45,7 +45,14 @@ function getWebsiteUrl(website: string | null) {
 }
 
 function getLeadPhone(lead: Lead | null) {
-  return lead?.whatsapp || lead?.phone || lead?.phone_2 || null;
+  if (!lead) {
+    return null;
+  }
+
+  const qualification = getLeadQualification(lead);
+  return qualification.whatsapp_status === "confirmed" || qualification.whatsapp_status === "possible"
+    ? lead.whatsapp
+    : null;
 }
 
 export function WhatsAppPageContent() {
@@ -59,13 +66,20 @@ export function WhatsAppPageContent() {
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMarkingContacted, setIsMarkingContacted] = useState(false);
+  const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
   const [variantSeed, setVariantSeed] = useState(1);
 
   const selectedLead = useMemo(
     () => leads.find((lead) => lead.id === leadId) ?? null,
     [leadId, leads],
   );
-  const selectedIndex = leads.findIndex((lead) => lead.id === leadId);
+  const approachLeads = useMemo(
+    () => onlyEligibleLeads
+      ? leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
+      : leads,
+    [leads, onlyEligibleLeads],
+  );
+  const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;
   const websiteUrl = getWebsiteUrl(selectedLead?.website ?? null);
@@ -124,6 +138,12 @@ export function WhatsAppPageContent() {
     setMessageId(null);
     setVariantSeed(1);
   }, [selectedLead]);
+
+  useEffect(() => {
+    if (approachLeads.length > 0 && !approachLeads.some((lead) => lead.id === leadId)) {
+      setLeadId(approachLeads[0].id);
+    }
+  }, [approachLeads, leadId]);
 
   async function recordWorkspaceAction(action: WorkspaceAction) {
     if (!selectedLead) {
@@ -256,12 +276,12 @@ export function WhatsAppPageContent() {
   }
 
   function handleNextLead() {
-    if (leads.length === 0) {
+    if (approachLeads.length === 0) {
       return;
     }
 
-    const nextIndex = selectedIndex < 0 || selectedIndex === leads.length - 1 ? 0 : selectedIndex + 1;
-    setLeadId(leads[nextIndex].id);
+    const nextIndex = selectedIndex < 0 || selectedIndex === approachLeads.length - 1 ? 0 : selectedIndex + 1;
+    setLeadId(approachLeads[nextIndex].id);
   }
 
   return (
@@ -294,10 +314,20 @@ export function WhatsAppPageContent() {
           <Card className="border-slate-200 bg-white shadow-sm">
             <CardHeader>
               <CardTitle>Fila de leads</CardTitle>
-              <p className="text-sm text-slate-500">{leads.length} leads disponíveis</p>
+              <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+                <span>{approachLeads.length} leads na fila</span>
+                <label className="flex items-center gap-2 text-xs text-slate-600">
+                  <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" />
+                  Só WhatsApp válido
+                </label>
+              </div>
             </CardHeader>
             <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
-              {leads.map((lead, index) => {
+              {approachLeads.length === 0 ? (
+                <p className="rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
+                  Nenhum lead com WhatsApp possível ou confirmado nesta fila.
+                </p>
+              ) : approachLeads.map((lead, index) => {
                 const itemQualification = getLeadQualification(lead);
                 const active = lead.id === leadId;
                 const hasPhone = Boolean(getLeadPhone(lead));
@@ -317,8 +347,8 @@ export function WhatsAppPageContent() {
                       <span className="text-xs text-slate-400">{index + 1}</span>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                        {hasPhone ? "WhatsApp possível" : "Sem WhatsApp"}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : itemQualification.whatsapp_status === "landline" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
+                        {hasPhone ? "WhatsApp possível" : itemQualification.whatsapp_status === "landline" ? "Telefone fixo" : "Sem WhatsApp"}
                       </span>
                       {itemQualification.instagram_status === "found" ? <span className="rounded-full bg-pink-50 px-2 py-0.5 text-xs font-medium text-pink-700">Instagram</span> : null}
                     </div>
@@ -375,7 +405,7 @@ export function WhatsAppPageContent() {
               <CardContent className="space-y-3">
                 <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
                   <p className="font-semibold text-slate-950">{selectedLead?.name}</p>
-                  <p className="mt-1">{getLeadPhone(selectedLead) ?? "Sem telefone cadastrado"}</p>
+                  <p className="mt-1">{getLeadPhone(selectedLead) ?? selectedLead?.phone ?? selectedLead?.phone_2 ?? "Sem telefone cadastrado"}</p>
                   {selectedLead?.city ? <p className="mt-1 text-xs text-slate-500">{selectedLead.city}{selectedLead.state ? `, ${selectedLead.state}` : ""}</p> : null}
                 </div>
 
