@@ -9,6 +9,7 @@ import type { ExternalLead, NormalizedLead } from "@/src/lib/lead-sources/types"
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { findDuplicateLead } from "@/src/lib/turso/leads-repository";
 import { createSearchLog } from "@/src/lib/turso/search-logs-repository";
+import { canUseLeadSearchSource } from "@/src/lib/permissions/source-permissions";
 import { canSearch } from "@/src/lib/usage/limits";
 
 const categoryIds = leadCategories.map((category) => category.id);
@@ -176,6 +177,10 @@ export async function POST(request: Request) {
 
   if (userError || !user) {
     return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  if (!(await canUseLeadSearchSource(user, "site_sales"))) {
+    return NextResponse.json({ error: "Fonte de busca indisponivel." }, { status: 403 });
   }
 
   const parsed = siteSalesSearchSchema.safeParse(await request.json());

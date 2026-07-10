@@ -7,6 +7,7 @@ import type { CnpjLeadSearchParams, NormalizedLead } from "@/src/lib/lead-source
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { findDuplicateLead } from "@/src/lib/turso/leads-repository";
 import { createSearchLog } from "@/src/lib/turso/search-logs-repository";
+import { canUseLeadSearchSource } from "@/src/lib/permissions/source-permissions";
 import { canSearch } from "@/src/lib/usage/limits";
 
 const cnpjSearchSchema = z.object({
@@ -87,6 +88,13 @@ export async function POST(request: Request) {
 
   if (userError || !user) {
     return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  if (!(await canUseLeadSearchSource(user, "cnpj_brasil"))) {
+    return NextResponse.json(
+      { error: "Esta fonte esta disponivel apenas no modo desenvolvedor." },
+      { status: 403 },
+    );
   }
 
   const parsed = cnpjSearchSchema.safeParse(await request.json());

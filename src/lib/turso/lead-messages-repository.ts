@@ -13,6 +13,21 @@ export type LeadMessageInput = {
   created_at?: string;
 };
 
+function parseObjective(value: string | null) {
+  if (!value) {
+    return {} as Record<string, unknown>;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {} as Record<string, unknown>;
+  }
+}
+
 export async function createMessage(userId: string, leadId: string, data: LeadMessageInput) {
   const lead = await getLeadById(userId, leadId);
 
@@ -53,6 +68,42 @@ export async function listMessagesByLead(userId: string, leadId: string) {
   });
 
   return result.rows.map(rowToTursoLeadMessage);
+}
+
+export async function updateMessageWorkspaceMetadata(
+  userId: string,
+  leadId: string,
+  messageId: string,
+  metadata: Record<string, unknown>,
+) {
+  const result = await getTursoClient().execute({
+    args: [userId, leadId, messageId],
+    sql: `${selectMessageSql} where user_id = ? and lead_id = ? and id = ? limit 1`,
+  });
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  const existing = parseObjective(typeof row.objective === "string" ? row.objective : null);
+  const objective = JSON.stringify({
+    ...existing,
+    ...metadata,
+    source: "manual_whatsapp_workspace",
+  });
+
+  await getTursoClient().execute({
+    args: [objective, userId, leadId, messageId],
+    sql: "update lead_messages set objective = ? where user_id = ? and lead_id = ? and id = ?",
+  });
+
+  const updated = await getTursoClient().execute({
+    args: [userId, leadId, messageId],
+    sql: `${selectMessageSql} where user_id = ? and lead_id = ? and id = ? limit 1`,
+  });
+
+  return updated.rows[0] ? rowToTursoLeadMessage(updated.rows[0]) : null;
 }
 
 export async function countMessages(userId: string) {

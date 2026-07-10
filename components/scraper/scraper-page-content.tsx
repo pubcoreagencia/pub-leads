@@ -59,6 +59,7 @@ type SearchFormState = {
 };
 
 type ScraperPageContentProps = {
+  canSelectSource: boolean;
   googlePlacesEnabled: boolean;
 };
 
@@ -189,7 +190,7 @@ function getWhatsAppHref(lead: SearchResultLead) {
   }
 }
 
-export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentProps) {
+export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: ScraperPageContentProps) {
   const [form, setForm] = useState<SearchFormState>(initialForm);
   const [results, setResults] = useState<SearchResultLead[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
@@ -198,6 +199,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
   const [qualificationFilter, setQualificationFilter] = useState<QualificationFilter>("all");
   const [qualificationProgress, setQualificationProgress] = useState("");
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
+  const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
 
   const visibleResults = useMemo(
@@ -246,12 +248,20 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     () => visibleResults.filter((lead) => !lead.saved),
     [visibleResults],
   );
+  const selectedUnsavedResults = useMemo(
+    () => unsavedVisibleResults.filter((lead) => selectedResultIds.has(getLeadIdentifier(lead))),
+    [selectedResultIds, unsavedVisibleResults],
+  );
 
   function updateField<K extends keyof SearchFormState>(field: K, value: SearchFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
   function handleSourceChange(source: LeadSearchSource) {
+    if (!canSelectSource) {
+      return;
+    }
+
     if (source === "google_places" && !googlePlacesEnabled) {
       toast({
         title: "Google Places indisponivel",
@@ -517,15 +527,18 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     }
   }
 
-  async function handleSaveAll() {
-    if (unsavedVisibleResults.length === 0) {
+  async function handleSaveVisible() {
+    const leadsToSave = selectedUnsavedResults.length > 0 ? selectedUnsavedResults : unsavedVisibleResults;
+
+    if (leadsToSave.length === 0) {
       return;
     }
 
     setIsSavingAll(true);
 
     try {
-      const data = await saveLeads(unsavedVisibleResults);
+      const data = await saveLeads(leadsToSave);
+      setSelectedResultIds(new Set());
       toast({
         title: "Leads salvos",
         description: `${data.savedExternalIds.length} novos leads salvos. ${data.skippedExternalIds.length} duplicados ignorados.`,
@@ -533,7 +546,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
       });
     } catch (error) {
       toast({
-        title: "Erro ao salvar todos",
+        title: "Erro ao salvar resultados",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
@@ -542,38 +555,59 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
     }
   }
 
+  function toggleResultSelection(lead: SearchResultLead, checked: boolean) {
+    const id = getLeadIdentifier(lead);
+
+    setSelectedResultIds((current) => {
+      const next = new Set(current);
+
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+
+      return next;
+    });
+  }
+
   return (
     <section className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Prospeccao de leads</h1>
+            <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Prospecção de leads</h1>
             <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
               Venda de Sites
             </span>
           </div>
           <p className="mt-2 text-sm leading-6 text-slate-500">
-            Encontre empresas com telefone e sem site conhecido usando CNPJ Brasil e OpenStreetMap.
+            Busque, qualifique, filtre e salve oportunidades comerciais em um fluxo único.
           </p>
         </div>
         <Button
           disabled={unsavedVisibleResults.length === 0 || isSavingAll}
-          onClick={handleSaveAll}
+          onClick={handleSaveVisible}
           type="button"
         >
           {isSavingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {qualificationFilter === "all" ? "Salvar todos" : "Salvar filtrados"}
+          {selectedUnsavedResults.length > 0
+            ? `Salvar ${selectedUnsavedResults.length} selecionados`
+            : qualificationFilter === "all"
+              ? "Salvar resultados"
+              : "Salvar filtrados"}
         </Button>
       </div>
 
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardHeader>
-          <CardTitle>Buscar leads</CardTitle>
+          <CardTitle>Parâmetros da busca</CardTitle>
         </CardHeader>
         <CardContent>
           <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-6" onSubmit={handleSearch}>
+            {canSelectSource ? (
             <div className="grid gap-2">
-              <Label htmlFor="source">Fonte</Label>
+              <Label htmlFor="source">Fonte de teste</Label>
               <select
                 className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                 id="source"
@@ -587,13 +621,24 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                   {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
                 </option>
               </select>
-              <p className="text-xs leading-5 text-slate-500">{sourceHints[form.source]}</p>
+              <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
               {!googlePlacesEnabled ? (
                 <p className="text-xs leading-5 text-amber-700">
                   Google Places está desativado nesta instalação até a chave ser configurada.
                 </p>
               ) : null}
             </div>
+            ) : (
+              <div className="grid gap-2">
+                <Label>Fonte da busca</Label>
+                <div className="flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                  Venda de Sites
+                </div>
+                <p className="text-xs leading-5 text-slate-500">
+                  A busca será feita automaticamente pela melhor fonte disponível.
+                </p>
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label htmlFor="city">Cidade</Label>
@@ -748,6 +793,12 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
 
       {results.length > 0 ? (
         <Card className="border-slate-200 bg-white shadow-sm">
+          <CardHeader className="pb-0">
+            <CardTitle>Qualificação</CardTitle>
+            <p className="text-sm leading-6 text-slate-500">
+              Verifique contatos públicos disponíveis, como WhatsApp possível, Instagram, site e email.
+            </p>
+          </CardHeader>
           <CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="grid gap-2 sm:min-w-72">
               <Label htmlFor="qualification-filter">Filtro de qualificacao</Label>
@@ -786,6 +837,19 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
         </Card>
       ) : null}
 
+      {results.length > 0 ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            <strong className="font-semibold text-slate-950">Resultados</strong> · {visibleResults.length} de {results.length} visíveis
+          </span>
+          <span className="text-xs text-slate-500">
+            {selectedUnsavedResults.length > 0
+              ? `${selectedUnsavedResults.length} selecionados para salvar`
+              : "Selecione apenas os leads que deseja salvar."}
+          </span>
+        </div>
+      ) : null}
+
       {isSearching ? (
         <div className="flex min-h-72 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
           <Loader2 className="mr-2 h-5 w-5 animate-spin text-purple-600" />
@@ -803,7 +867,16 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
             <Card className="border-slate-200 bg-white shadow-sm" key={getLeadIdentifier(lead)}>
               <CardContent className="p-5">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 gap-3">
+                    <input
+                      aria-label={`Selecionar ${lead.name}`}
+                      checked={selectedResultIds.has(getLeadIdentifier(lead))}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                      disabled={lead.saved}
+                      onChange={(event) => toggleResultSelection(lead, event.target.checked)}
+                      type="checkbox"
+                    />
+                    <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-base font-semibold text-slate-950">{lead.name}</h2>
                       {lead.saved ? (
@@ -843,6 +916,7 @@ export function ScraperPageContent({ googlePlacesEnabled }: ScraperPageContentPr
                           {tag.replaceAll("_", " ")}
                         </span>
                       ))}
+                    </div>
                     </div>
                   </div>
                   <Button

@@ -15,6 +15,9 @@ type PipelineCardProps = {
 
 export function PipelineCard({ lead }: PipelineCardProps) {
   const qualification = getLeadQualification(lead);
+  const phone = lead.whatsapp || lead.phone || lead.phone_2;
+  const phoneDigits = phone?.replace(/\D/g, "") ?? "";
+  const whatsappUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : null;
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: {
@@ -102,6 +105,30 @@ export function PipelineCard({ lead }: PipelineCardProps) {
             </span>
           ) : null}
         </div>
+        {whatsappUrl || qualification.instagram_url ? (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {whatsappUrl ? (
+              <a
+                className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                href={whatsappUrl}
+                rel="noreferrer"
+                target="publeads_whatsapp_workspace"
+              >
+                <MessageCircle className="h-3 w-3" /> WhatsApp
+              </a>
+            ) : null}
+            {qualification.instagram_url ? (
+              <a
+                className="inline-flex items-center gap-1 text-xs font-medium text-pink-700 hover:text-pink-800"
+                href={qualification.instagram_url}
+                rel="noreferrer"
+                target="publeads_instagram_workspace"
+              >
+                <Instagram className="h-3 w-3" /> Instagram
+              </a>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );

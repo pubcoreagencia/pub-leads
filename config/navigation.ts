@@ -19,12 +19,12 @@ export type DashboardNavItem = {
 
 export const dashboardNavItems: DashboardNavItem[] = [
   { title: "Dashboard", href: "/app/dashboard", icon: LayoutDashboard },
-  { title: "Scraper", href: "/app/scraper", icon: Search },
+  { title: "Prospecção", href: "/app/scraper", icon: Search },
   { title: "Leads", href: "/app/leads", icon: Users },
   { title: "Pipeline", href: "/app/pipeline", icon: KanbanSquare },
   { title: "WhatsApp", href: "/app/whatsapp", icon: MessageCircle },
   { title: "Analytics", href: "/app/analytics", icon: BarChart3 },
-  { title: "Billing", href: "/app/billing", icon: CreditCard },
+  { title: "Assinatura", href: "/app/billing", icon: CreditCard },
   { title: "Planos", href: "/app/planos", icon: BadgeDollarSign },
-  { title: "Config", href: "/app/config", icon: Settings },
+  { title: "Configurações", href: "/app/config", icon: Settings },
 ];

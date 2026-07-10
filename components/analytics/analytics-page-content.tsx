@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, MessageCircle, Search, Target, TrendingUp, Users } from "lucide-react";
+import { BarChart3, Globe2, Instagram, MessageCircle, Search, Target, TrendingUp, Users } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AnalyticsSummary, ChartPoint } from "@/src/lib/analytics/summary";
@@ -69,6 +69,13 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
     { label: "Mensagens geradas", value: summary.totals.messages, icon: MessageCircle },
     { label: "Taxa de conversão", value: `${summary.conversionRate}%`, icon: TrendingUp },
   ];
+  const qualificationStats = [
+    { label: "Com WhatsApp", value: summary.qualification.possibleWhatsapp, icon: MessageCircle },
+    { label: "Sem WhatsApp", value: summary.qualification.missingWhatsapp, icon: MessageCircle },
+    { label: "Com Instagram", value: summary.qualification.withInstagram, icon: Instagram },
+    { label: "Com site", value: summary.qualification.withSite, icon: Globe2 },
+    { label: "Taxa qualificada", value: `${summary.qualification.qualificationRate}%`, icon: Target },
+  ];
   const activeSources = summary.sources.filter((source) => source.value > 0);
 
   return (
@@ -101,6 +108,24 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
           </Card>
         ))}
       </div>
+
+      <Card className="border-slate-200 bg-white shadow-sm">
+        <CardHeader>
+          <CardTitle>Qualificação da base</CardTitle>
+          <CardDescription>Disponibilidade de canais e dados comerciais por lead.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {qualificationStats.map((stat) => (
+            <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-4" key={stat.label}>
+              <stat.icon className="h-4 w-4 text-purple-600" />
+              <div>
+                <p className="text-xs text-slate-500">{stat.label}</p>
+                <p className="mt-1 text-lg font-semibold text-slate-950">{stat.value}</p>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard
