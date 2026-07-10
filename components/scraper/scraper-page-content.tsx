@@ -212,10 +212,27 @@ function instagramBadge(qualification: LeadQualification) {
 }
 
 async function parseJsonResponse<T>(response: Response) {
-  const payload = (await response.json()) as T & { error?: string };
+  const rawBody = await response.text();
+  let payload: (T & { error?: string }) | null = null;
+
+  if (rawBody.trim()) {
+    try {
+      payload = JSON.parse(rawBody) as T & { error?: string };
+    } catch {
+      throw new Error(
+        response.ok
+          ? "A API retornou uma resposta invalida."
+          : `A API retornou uma resposta invalida (${response.status}).`,
+      );
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(payload.error ?? "Nao foi possivel concluir a operacao.");
+    throw new Error(payload?.error ?? "Nao foi possivel concluir a operacao.");
+  }
+
+  if (!payload) {
+    throw new Error("A API retornou uma resposta vazia.");
   }
 
   return payload;

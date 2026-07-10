@@ -114,6 +114,98 @@ const resultColumns = [
   "updated_at",
 ] as const;
 
+let ensureScrapingSessionSchemaPromise: Promise<void> | null = null;
+
+function ensureScrapingSessionSchema() {
+  ensureScrapingSessionSchemaPromise ??= getTursoClient().executeMultiple(`
+    pragma foreign_keys = on;
+
+    create table if not exists scraping_sessions (
+      id text primary key,
+      user_id text not null,
+      source text not null,
+      status text not null default 'idle',
+      city text,
+      niche text,
+      query text,
+      requested_limit integer,
+      results_count integer not null default 0,
+      selected_count integer not null default 0,
+      filters text,
+      source_run_id text,
+      apify_run_id text,
+      apify_dataset_id text,
+      error_message text,
+      metadata text not null default '{}',
+      created_at text not null default current_timestamp,
+      updated_at text not null default current_timestamp,
+      expires_at text
+    );
+
+    create table if not exists scraping_session_results (
+      id text primary key,
+      session_id text not null references scraping_sessions(id) on delete cascade,
+      user_id text not null,
+      external_id text,
+      source text not null,
+      name text not null,
+      company text,
+      category text,
+      phone text,
+      whatsapp text,
+      email text,
+      website text,
+      instagram_url text,
+      instagram_handle text,
+      address text,
+      city text,
+      state text,
+      country text,
+      latitude real,
+      longitude real,
+      status text,
+      phone_type text,
+      whatsapp_status text,
+      instagram_status text,
+      qualification_tags text,
+      qualification_score integer,
+      metadata text not null default '{}',
+      is_selected integer not null default 0,
+      is_saved integer not null default 0,
+      saved_lead_id text,
+      created_at text not null default current_timestamp,
+      updated_at text not null default current_timestamp
+    );
+
+    create index if not exists scraping_sessions_user_updated_idx on scraping_sessions(user_id, updated_at);
+    create index if not exists scraping_sessions_user_status_idx on scraping_sessions(user_id, status);
+    create index if not exists scraping_session_results_session_idx on scraping_session_results(session_id);
+    create index if not exists scraping_session_results_user_session_idx on scraping_session_results(user_id, session_id);
+    create index if not exists scraping_session_results_user_saved_idx on scraping_session_results(user_id, is_saved);
+    create unique index if not exists scraping_session_results_session_external_unique_idx
+      on scraping_session_results(session_id, external_id)
+      where external_id is not null and external_id <> '';
+
+    create trigger if not exists scraping_sessions_set_updated_at
+    after update on scraping_sessions
+    for each row
+    when new.updated_at = old.updated_at
+    begin
+      update scraping_sessions set updated_at = current_timestamp where id = old.id;
+    end;
+
+    create trigger if not exists scraping_session_results_set_updated_at
+    after update on scraping_session_results
+    for each row
+    when new.updated_at = old.updated_at
+    begin
+      update scraping_session_results set updated_at = current_timestamp where id = old.id;
+    end;
+  `).then(() => undefined);
+
+  return ensureScrapingSessionSchemaPromise;
+}
+
 function cleanString(value: string | null | undefined) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
@@ -303,6 +395,8 @@ function resultToLeadInput(result: ScrapingSessionLead): LeadWriteInput {
 }
 
 async function refreshSessionCounts(userId: string, sessionId: string) {
+  await ensureScrapingSessionSchema();
+
   const result = await getTursoClient().execute({
     args: [userId, sessionId],
     sql: "select count(*) as results_count, coalesce(sum(is_selected), 0) as selected_count from scraping_session_results where user_id = ? and session_id = ?",
@@ -318,6 +412,8 @@ async function refreshSessionCounts(userId: string, sessionId: string) {
 }
 
 export async function createScrapingSession(userId: string, input: ScrapingSessionCreateInput) {
+  await ensureScrapingSessionSchema();
+
   const now = new Date().toISOString();
   const id = crypto.randomUUID();
 
@@ -344,6 +440,8 @@ export async function createScrapingSession(userId: string, input: ScrapingSessi
 }
 
 export async function getScrapingSession(userId: string, sessionId: string) {
+  await ensureScrapingSessionSchema();
+
   const row = (await getTursoClient().execute({
     args: [userId, sessionId],
     sql: `select ${sessionColumns.join(", ")} from scraping_sessions where user_id = ? and id = ? limit 1`,
@@ -353,6 +451,8 @@ export async function getScrapingSession(userId: string, sessionId: string) {
 }
 
 export async function getCurrentScrapingSession(userId: string): Promise<ScrapingSessionWithResults | null> {
+  await ensureScrapingSessionSchema();
+
   const row = (await getTursoClient().execute({
     args: [userId],
     sql: `select ${sessionColumns.join(", ")} from scraping_sessions where user_id = ? and status != 'cancelled' order by datetime(updated_at) desc limit 1`,
@@ -368,6 +468,8 @@ export async function getCurrentScrapingSession(userId: string): Promise<Scrapin
 }
 
 export async function getScrapingSessionWithResults(userId: string, sessionId: string): Promise<ScrapingSessionWithResults | null> {
+  await ensureScrapingSessionSchema();
+
   const session = await getScrapingSession(userId, sessionId);
 
   if (!session) {
@@ -379,6 +481,8 @@ export async function getScrapingSessionWithResults(userId: string, sessionId: s
 }
 
 export async function updateScrapingSession(userId: string, sessionId: string, data: ScrapingSessionUpdateInput) {
+  await ensureScrapingSessionSchema();
+
   const entries = Object.entries(data).filter(([, value]) => value !== undefined);
 
   if (entries.length === 0) {
@@ -404,6 +508,8 @@ export async function updateScrapingSession(userId: string, sessionId: string, d
 }
 
 export async function deleteScrapingSession(userId: string, sessionId: string) {
+  await ensureScrapingSessionSchema();
+
   const result = await getTursoClient().execute({
     args: [userId, sessionId],
     sql: "delete from scraping_sessions where user_id = ? and id = ?",
@@ -413,6 +519,8 @@ export async function deleteScrapingSession(userId: string, sessionId: string) {
 }
 
 export async function listScrapingSessionResults(userId: string, sessionId: string, limit = 500) {
+  await ensureScrapingSessionSchema();
+
   const result = await getTursoClient().execute({
     args: [userId, sessionId, Math.min(Math.max(Math.trunc(limit), 1), 1000)],
     sql: `select ${resultColumns.join(", ")} from scraping_session_results where user_id = ? and session_id = ? order by datetime(created_at) asc limit ?`,
@@ -426,6 +534,8 @@ export async function upsertScrapingSessionResults(
   sessionId: string,
   leads: Array<NormalizedLead & { externalId?: string; saved?: boolean; selected?: boolean; whatsapp?: string | null }>,
 ) {
+  await ensureScrapingSessionSchema();
+
   const session = await getScrapingSession(userId, sessionId);
 
   if (!session) {
@@ -493,7 +603,7 @@ export async function upsertScrapingSessionResults(
         now,
       ],
       sql: `insert into scraping_session_results (${resultColumns.join(", ")}) values (${resultColumns.map(() => "?").join(", ")})
-        on conflict(session_id, external_id) do update set
+        on conflict(session_id, external_id) where external_id is not null and external_id <> '' do update set
           source = excluded.source,
           name = excluded.name,
           company = excluded.company,
@@ -527,6 +637,8 @@ export async function upsertScrapingSessionResults(
 }
 
 export async function updateScrapingSessionResultSelection(userId: string, sessionId: string, resultIds: string[], selected: boolean) {
+  await ensureScrapingSessionSchema();
+
   const ids = Array.from(new Set(resultIds.map(cleanString).filter(Boolean)));
 
   if (ids.length === 0) {
@@ -548,6 +660,8 @@ export async function updateScrapingSessionResultLeads(
   sessionId: string,
   leads: Array<NormalizedLead & { externalId?: string; saved?: boolean; selected?: boolean; whatsapp?: string | null }>,
 ) {
+  await ensureScrapingSessionSchema();
+
   for (const lead of leads.slice(0, 1000)) {
     await upsertScrapingSessionResults(userId, sessionId, [lead]);
   }
@@ -560,6 +674,8 @@ export async function saveScrapingSessionResultsAsLeads(
   sessionId: string,
   resultIds: string[],
 ): Promise<SaveSessionLeadsResult> {
+  await ensureScrapingSessionSchema();
+
   const ids = Array.from(new Set(resultIds.map(cleanString).filter(Boolean))).slice(0, 100);
   const allResults = await listScrapingSessionResults(userId, sessionId, 1000);
   const selectedResults = ids.length > 0
