@@ -1,48 +1,57 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, MessageCircle, Search } from "lucide-react";
+import { ArrowRight, Database, Instagram, KanbanSquare, MessageCircle, Search, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-const highlights = [
+const workflow = [
   {
-    title: "Prospecção",
-    description: "Base preparada para leads por OpenStreetMap e Overpass.",
+    description: "Busque empresas por cidade, nicho e fonte disponível sem expor complexidade técnica para o operador.",
     icon: Search,
+    title: "Prospecção guiada",
   },
   {
-    title: "Pipeline",
-    description: "Fundação visual para CRM e etapas comerciais.",
-    icon: BarChart3,
+    description: "Identifique WhatsApp possível, telefone fixo, Instagram, site e sinais úteis antes de salvar.",
+    icon: ShieldCheck,
+    title: "Qualificação comercial",
   },
   {
-    title: "WhatsApp manual",
-    description: "MVP orientado a links wa.me com mensagens prontas.",
+    description: "Mova oportunidades entre etapas e mantenha a operação comercial organizada.",
+    icon: KanbanSquare,
+    title: "Pipeline operacional",
+  },
+  {
+    description: "Diversifique uma copy base e abra o WhatsApp manualmente, sem automação de envio.",
     icon: MessageCircle,
+    title: "Abordagem manual",
   },
+];
+
+const sources = [
+  { icon: Database, label: "CNPJ no Turso" },
+  { icon: Instagram, label: "Instagram quando disponível" },
+  { icon: Search, label: "Apify para contas avançadas" },
 ];
 
 export default function HomePage() {
   return (
-    <section className="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-12 sm:px-6 lg:px-8">
-      <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-        <div className="space-y-6">
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 py-12 sm:px-6 lg:px-8">
+      <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+        <div className="space-y-7">
           <div className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-sm font-medium text-purple-700">
-            PubLeads SaaS
+            PubLeads · prospecção e abordagem B2B
           </div>
           <div className="space-y-4">
             <h1 className="max-w-3xl text-4xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
-              CRM e prospecção B2B em uma base premium.
+              Encontre leads bons, qualifique contatos e aborde com ritmo comercial.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-slate-600">
-              Fundação visual para capturar leads, organizar oportunidades e preparar
-              abordagens comerciais com consistência.
+              PubLeads une scraping controlado, CNPJ, qualificação de canais, CRM, pipeline e workspace de abordagem manual para transformar busca em oportunidade.
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button asChild>
-              <Link href="/app/dashboard">
-                Abrir dashboard
+              <Link href="/register">
+                Criar conta
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -52,27 +61,59 @@ export default function HomePage() {
           </div>
         </div>
 
-        <Card className="border-purple-100 shadow-premium">
-          <CardHeader>
-            <CardTitle>Operação comercial</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {highlights.map((item) => (
-              <div
-                className="flex items-start gap-3 rounded-lg border border-slate-100 bg-slate-50/80 p-4"
-                key={item.title}
-              >
-                <div className="rounded-md bg-purple-100 p-2 text-purple-700">
-                  <item.icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-semibold text-slate-950">{item.title}</h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-600">{item.description}</p>
-                </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium">
+          <div className="rounded-lg bg-slate-950 p-5 text-white">
+            <p className="text-sm font-medium text-purple-200">Cockpit comercial</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-white/10 p-4">
+                <p className="text-xs text-slate-300">Leads com canal</p>
+                <p className="mt-2 text-3xl font-semibold">78%</p>
               </div>
+              <div className="rounded-lg bg-white/10 p-4">
+                <p className="text-xs text-slate-300">Próxima ação</p>
+                <p className="mt-2 text-sm font-semibold">Abrir abordagem</p>
+              </div>
+            </div>
+            <div className="mt-4 rounded-lg bg-white p-4 text-slate-950">
+              <p className="font-semibold">Clínica Exemplo</p>
+              <p className="mt-1 text-sm text-slate-500">Nova Friburgo · clínicas odontológicas</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">WhatsApp possível</span>
+                <span className="rounded-full bg-pink-50 px-2 py-1 font-medium text-pink-700">Instagram</span>
+                <span className="rounded-full bg-purple-50 px-2 py-1 font-medium text-purple-700">Pipeline</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {workflow.map((item) => (
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" key={item.title}>
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-purple-50 text-purple-700">
+              <item.icon className="h-5 w-5" />
+            </div>
+            <h2 className="font-semibold text-slate-950">{item.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.description}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-950">Fontes e dados preparados para operação real</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">Supabase cuida de auth/billing; Turso guarda dados operacionais e volumosos.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sources.map((source) => (
+              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700" key={source.label}>
+                <source.icon className="h-4 w-4 text-purple-700" />
+                {source.label}
+              </span>
             ))}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </section>
   );

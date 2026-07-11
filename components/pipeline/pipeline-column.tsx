@@ -23,8 +23,8 @@ export function PipelineColumn({ column, leads }: PipelineColumnProps) {
   return (
     <section
       className={cn(
-        "flex min-h-[320px] flex-col rounded-lg border border-slate-200 bg-slate-50/80",
-        isOver && "border-purple-300 bg-purple-50",
+        "flex min-h-[420px] flex-col rounded-lg border border-slate-200 bg-slate-50/80",
+        isOver && "border-purple-300 bg-purple-50 ring-2 ring-purple-100",
       )}
       ref={setNodeRef}
     >
@@ -41,7 +41,7 @@ export function PipelineColumn({ column, leads }: PipelineColumnProps) {
       <div className="grid flex-1 content-start gap-3 p-3">
         {leads.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white/70 p-4 text-center text-xs leading-5 text-slate-500">
-            Sem leads nesta etapa.
+            Arraste um lead para esta etapa quando houver avanço comercial.
           </div>
         ) : (
           leads.map((lead) => <PipelineCard key={lead.id} lead={lead} />)

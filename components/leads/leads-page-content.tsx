@@ -13,9 +13,11 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  Users,
 } from "lucide-react";
 
 import { LeadDetailModal } from "@/components/leads/lead-detail-modal";
+import { ActionBar, MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -319,27 +321,41 @@ export function LeadsPageContent() {
 
   const selectedCount = selectedLeadIds.size;
   const allVisibleSelected = leads.length > 0 && leads.every((lead) => selectedLeadIds.has(lead.id));
+  const leadsWithWhatsapp = leads.filter((lead) =>
+    ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status),
+  ).length;
+  const leadsWithInstagram = leads.filter((lead) => getLeadQualification(lead).instagram_status === "found").length;
+  const fixedPhones = leads.filter((lead) => getLeadQualification(lead).whatsapp_status === "landline").length;
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Leads</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Gerencie contatos, dados comerciais e notas internas.
-          </p>
-        </div>
-        <Button onClick={openCreateModal} type="button">
-          <Plus className="h-4 w-4" />
-          Novo lead
-        </Button>
+      <PageHeader
+        actions={(
+          <Button onClick={openCreateModal} type="button">
+            <Plus className="h-4 w-4" />
+            Novo lead
+          </Button>
+        )}
+        description="Revise canais, qualidade e estágio comercial antes de mandar leads para abordagem ou pipeline."
+        eyebrow="Base CRM"
+        title="Leads"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard accent="purple" icon={Users} label="Leads visíveis" value={leads.length} />
+        <MetricCard accent="emerald" icon={MessageCircle} label="Com WhatsApp" value={leadsWithWhatsapp} />
+        <MetricCard accent="pink" icon={Instagram} label="Com Instagram" value={leadsWithInstagram} />
+        <MetricCard accent="amber" icon={PhoneCall} label="Telefone fixo" value={fixedPhones} />
       </div>
 
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardContent className="p-5">
-          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-950">
-            <SlidersHorizontal className="h-4 w-4 text-purple-600" />
-            Filtros
+          <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+              <SlidersHorizontal className="h-4 w-4 text-purple-600" />
+              Filtros de qualificação
+            </div>
+            <StatusBadge tone="slate">Tabela no desktop · cards no mobile</StatusBadge>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-8">
             <div className="grid gap-2">
@@ -478,7 +494,7 @@ export function LeadsPageContent() {
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardContent className="p-0">
           {selectedCount > 0 ? (
-            <div className="flex flex-col gap-3 border-b border-slate-200 bg-red-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <ActionBar className="rounded-none border-x-0 border-t-0 bg-red-50/60">
               <span className="text-sm font-medium text-red-900">
                 {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
               </span>
@@ -492,7 +508,7 @@ export function LeadsPageContent() {
                 {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 {selectedCount === 1 ? "Excluir selecionado" : `Excluir ${selectedCount} leads`}
               </Button>
-            </div>
+            </ActionBar>
           ) : null}
           {isLoading ? (
             <div className="flex min-h-72 items-center justify-center gap-3 text-sm text-slate-500">

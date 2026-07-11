@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 
+import { PageHeader, StatusBadge } from "@/components/ops/page";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { billingPlans } from "@/config/billing-plans";
 import { cn } from "@/lib/utils";
@@ -22,12 +23,12 @@ function formatUsage(current: number, limit: number | null) {
 export function PlansPageContent({ usage }: PlansPageContentProps) {
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Planos</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-500">
-          Acompanhe seu plano atual, limites e uso mensal.
-        </p>
-      </div>
+      <PageHeader
+        actions={<StatusBadge tone={usage.plan.limits.leadLimit === null ? "amber" : "purple"}>{usage.plan.name}</StatusBadge>}
+        description="Acompanhe limites, uso mensal e diferenças entre planos. Cobrança fica na aba Assinatura."
+        eyebrow="Plano e limites"
+        title="Planos"
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-purple-200 bg-white shadow-sm">

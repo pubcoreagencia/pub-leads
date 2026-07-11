@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { closestCorners, DndContext, type DragEndEvent } from "@dnd-kit/core";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Target, TrendingUp, Users } from "lucide-react";
 
+import { MetricCard, PageHeader } from "@/components/ops/page";
 import { PipelineColumn } from "@/components/pipeline/pipeline-column";
 import { Button } from "@/components/ui/button";
 import { pipelineColumns } from "@/config/pipeline";
@@ -54,6 +55,9 @@ export function PipelinePageContent() {
       },
     );
   }, [leads]);
+  const activeLeads = leads.filter((lead) => !["won", "lost"].includes(lead.status)).length;
+  const contactedLeads = leads.filter((lead) => ["contacted", "responded", "proposal"].includes(lead.status)).length;
+  const wonLeads = leads.filter((lead) => lead.status === "won").length;
 
   async function handleDragEnd(event: DragEndEvent) {
     const leadId = String(event.active.id);
@@ -94,17 +98,22 @@ export function PipelinePageContent() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Pipeline</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Arraste leads entre etapas para atualizar o status do pipeline.
-          </p>
-        </div>
-        <Button disabled={isLoading || isUpdating} onClick={loadLeads} type="button" variant="outline">
-          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          Atualizar
-        </Button>
+      <PageHeader
+        actions={(
+          <Button disabled={isLoading || isUpdating} onClick={loadLeads} type="button" variant="outline">
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            Atualizar
+          </Button>
+        )}
+        description="Arraste oportunidades entre etapas, priorize próximos contatos e acompanhe gargalos comerciais."
+        eyebrow="CRM operacional"
+        title="Pipeline"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard accent="purple" icon={Users} label="Leads no pipeline" value={leads.length} />
+        <MetricCard accent="blue" icon={TrendingUp} label="Ativos" value={activeLeads} />
+        <MetricCard accent="emerald" helper={`${wonLeads} ganhos`} icon={Target} label="Em contato" value={contactedLeads} />
       </div>
 
       {isLoading ? (
@@ -124,8 +133,8 @@ export function PipelinePageContent() {
         </div>
       ) : (
         <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="overflow-x-auto pb-2">
-            <div className="grid min-w-[1120px] grid-cols-7 gap-4">
+          <div className="overflow-x-auto pb-3">
+            <div className="grid min-w-[1260px] grid-cols-7 gap-4">
               {pipelineColumns.map((column) => (
                 <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
               ))}

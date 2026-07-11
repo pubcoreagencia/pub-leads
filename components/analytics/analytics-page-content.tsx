@@ -15,9 +15,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, Globe2, Instagram, MessageCircle, Search, Target, TrendingUp, Users } from "lucide-react";
+import { Globe2, Instagram, MessageCircle, Search, Target, TrendingUp, Users } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MetricCard, PageHeader } from "@/components/ops/page";
 import type { AnalyticsSummary, ChartPoint } from "@/src/lib/analytics/summary";
 
 type AnalyticsPageContentProps = {
@@ -80,32 +81,21 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Analytics</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Acompanhe aquisição de leads, buscas e evolução do pipeline.
-          </p>
-        </div>
-        <span className="inline-flex w-fit items-center gap-2 rounded-full border border-purple-100 bg-purple-50 px-3 py-1 text-xs font-medium text-purple-700">
-          <BarChart3 className="h-3.5 w-3.5" />
-          Dados comerciais
-        </span>
-      </div>
+      <PageHeader
+        description="Acompanhe volume, qualidade de canais e gargalos para decidir onde prospectar e abordar primeiro."
+        eyebrow="Inteligencia comercial"
+        title="Analytics"
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <Card className="border-slate-200 bg-white shadow-sm" key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500">{stat.label}</CardTitle>
-              <stat.icon className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-slate-950">
-                {typeof stat.value === "number" ? formatNumber(stat.value) : stat.value}
-              </div>
-            </CardContent>
-          </Card>
+          <MetricCard
+            accent={stat.label === "Taxa de conversão" ? "emerald" : "purple"}
+            icon={stat.icon}
+            key={stat.label}
+            label={stat.label}
+            value={typeof stat.value === "number" ? formatNumber(stat.value) : stat.value}
+          />
         ))}
       </div>
 

@@ -22,10 +22,10 @@ export function DashboardShell({
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-100">
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-950/40 lg:hidden">
-          <div className="h-full w-72 max-w-[86vw] bg-white">
+          <div className="h-full w-72 max-w-[86vw] bg-slate-950">
             <DashboardSidebar onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
@@ -42,7 +42,7 @@ export function DashboardShell({
           userInitials={userInitials}
           userName={userName}
         />
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>
     </div>
   );

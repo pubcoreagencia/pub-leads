@@ -27,6 +27,7 @@ import {
   qualifyLeadAfterScraping,
   type LeadQualification,
 } from "@/src/lib/lead-qualification/qualifier";
+import { PageHeader } from "@/components/ops/page";
 import type { ExternalLead, NormalizedLead } from "@/src/lib/lead-sources/types";
 import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 
@@ -146,6 +147,14 @@ const sourceHints: Record<LeadSearchSource, string> = {
   openstreetmap: "Complemento gratuito com cobertura variavel por cidade.",
   site_sales: "Busca CNPJ + OpenStreetMap, priorizando telefone e ausencia de site.",
 };
+
+const scraperSteps = [
+  { label: "Configurar", description: "Cidade, nicho e limite" },
+  { label: "Buscar", description: "Scraping e sessão temporária" },
+  { label: "Qualificar", description: "WhatsApp, Instagram e site" },
+  { label: "Filtrar", description: "Priorizar melhores leads" },
+  { label: "Salvar", description: "Enviar para CRM" },
+];
 
 const qualificationFilterLabels: Record<QualificationFilter, string> = {
   all: "Todos",
@@ -1219,30 +1228,50 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Prospecção de leads</h1>
-            <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-700">
-              Venda de Sites
-            </span>
-          </div>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Busque, qualifique, filtre e salve oportunidades comerciais em um fluxo único.
-          </p>
-        </div>
-        <Button
-          disabled={unsavedVisibleResults.length === 0 || isSavingAll}
-          onClick={handleSaveVisible}
-          type="button"
-        >
-          {isSavingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-          {selectedUnsavedResults.length > 0
-            ? `Salvar ${selectedUnsavedResults.length} selecionados`
-            : qualificationFilter === "all"
-              ? "Salvar resultados"
-              : "Salvar filtrados"}
-        </Button>
+      <PageHeader
+        actions={(
+          <Button
+            disabled={unsavedVisibleResults.length === 0 || isSavingAll}
+            onClick={handleSaveVisible}
+            type="button"
+          >
+            {isSavingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            {selectedUnsavedResults.length > 0
+              ? `Salvar ${selectedUnsavedResults.length} selecionados`
+              : qualificationFilter === "all"
+                ? "Salvar resultados"
+                : "Salvar filtrados"}
+          </Button>
+        )}
+        description="Configure uma busca, rode o scraping, qualifique canais e salve apenas as oportunidades uteis."
+        eyebrow="Fluxo de prospeccao"
+        title="Prospecção de leads"
+      />
+
+      <div className="grid gap-3 md:grid-cols-5">
+        {scraperSteps.map((step, index) => {
+          const active =
+            (index === 0 && !hasSearched) ||
+            (index === 1 && isSearching) ||
+            (index === 2 && results.length > 0 && qualificationFilter === "all") ||
+            (index === 3 && results.length > 0 && qualificationFilter !== "all") ||
+            (index === 4 && selectedUnsavedResults.length > 0);
+
+          return (
+            <div
+              className={`rounded-lg border p-4 ${active ? "border-purple-300 bg-purple-50" : "border-slate-200 bg-white"}`}
+              key={step.label}
+            >
+              <div className="flex items-center gap-2">
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                  {index + 1}
+                </span>
+                <p className="text-sm font-semibold text-slate-950">{step.label}</p>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{step.description}</p>
+            </div>
+          );
+        })}
       </div>
 
       {isLoadingSession ? (

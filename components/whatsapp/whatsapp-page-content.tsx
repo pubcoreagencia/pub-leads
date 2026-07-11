@@ -12,12 +12,14 @@ import {
   MessageCircle,
   SkipForward,
   Sparkles,
+  Users,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
 import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
 import { fetchLeads } from "@/services/leads";
@@ -96,6 +98,11 @@ export function WhatsAppPageContent() {
       return null;
     }
   }, [message, selectedLead]);
+  const whatsappReadyCount = leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status)).length;
+  const instagramOnlyCount = leads.filter((lead) => {
+    const item = getLeadQualification(lead);
+    return item.instagram_status === "found" && !["confirmed", "possible"].includes(item.whatsapp_status);
+  }).length;
 
   useEffect(() => {
     let active = true;
@@ -286,16 +293,17 @@ export function WhatsAppPageContent() {
 
   return (
     <section className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal text-slate-950">Workspace de abordagem</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Organize cada contato, diversifique a copy e envie manualmente pelo WhatsApp.
-          </p>
-        </div>
-        <span className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800">
-          O envio continua manual.
-        </span>
+      <PageHeader
+        actions={<StatusBadge tone="amber">Envio 100% manual</StatusBadge>}
+        description="Selecione o lead, diversifique a copy base e abra o canal correto sem automatizar disparos."
+        eyebrow="Central de abordagem"
+        title="Workspace de abordagem"
+      />
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <MetricCard accent="purple" icon={Users} label="Leads carregados" value={leads.length} />
+        <MetricCard accent="emerald" icon={MessageCircle} label="WhatsApp possível" value={whatsappReadyCount} />
+        <MetricCard accent="pink" icon={Instagram} label="Instagram sem WhatsApp" value={instagramOnlyCount} />
       </div>
 
       {isLoadingLeads ? (
