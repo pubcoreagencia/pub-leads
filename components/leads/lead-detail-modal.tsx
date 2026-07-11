@@ -306,7 +306,7 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
               <div className="grid gap-2">
                 <Label htmlFor="status">Status</Label>
                 <select
-                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="status"
                   {...register("status")}
                 >
@@ -321,7 +321,7 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
               <div className="grid gap-2">
                 <Label htmlFor="source">Origem</Label>
                 <select
-                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="source"
                   {...register("source")}
                 >
@@ -368,7 +368,7 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
               <div className="space-y-4">
                 <div className="grid gap-2">
                   <textarea
-                    className="min-h-24 rounded-md border border-input bg-white p-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                    className="min-h-24 rounded-md border border-input bg-white p-3 text-sm outline-none transition placeholder:text-slate-400 focus:border-red-400 focus:ring-2 focus:ring-red-100"
                     onChange={(event) => setNoteContent(event.target.value)}
                     placeholder="Adicionar nota..."
                     value={noteContent}

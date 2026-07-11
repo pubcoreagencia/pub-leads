@@ -89,11 +89,11 @@ export default function ConfigPage() {
           description="Fontes técnicas ficam protegidas por permissões server-side."
           title="Área avançada"
         >
-          <div className="flex items-start gap-3 rounded-lg border border-purple-100 bg-purple-50 p-4">
-            <Settings className="mt-0.5 h-5 w-5 text-purple-700" />
+          <div className="flex items-start gap-3 rounded-lg border border-red-100 bg-red-50 p-4">
+            <Settings className="mt-0.5 h-5 w-5 text-red-700" />
             <div>
-              <p className="font-semibold text-purple-950">Fontes Apify e modo dev</p>
-              <p className="mt-1 text-sm leading-6 text-purple-800">
+              <p className="font-semibold text-red-950">Fontes Apify e modo dev</p>
+              <p className="mt-1 text-sm leading-6 text-red-800">
                 Usuários comuns usam fonte automática. Contas internas/vitalícias podem escolher actors/tasks Apify sem expor token no navegador.
               </p>
             </div>

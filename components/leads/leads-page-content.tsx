@@ -342,7 +342,7 @@ export function LeadsPageContent() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard accent="purple" icon={Users} label="Leads visíveis" value={leads.length} />
+        <MetricCard accent="red" icon={Users} label="Leads visíveis" value={leads.length} />
         <MetricCard accent="emerald" icon={MessageCircle} label="Com WhatsApp" value={leadsWithWhatsapp} />
         <MetricCard accent="pink" icon={Instagram} label="Com Instagram" value={leadsWithInstagram} />
         <MetricCard accent="amber" icon={PhoneCall} label="Telefone fixo" value={fixedPhones} />
@@ -352,7 +352,7 @@ export function LeadsPageContent() {
         <CardContent className="p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-              <SlidersHorizontal className="h-4 w-4 text-purple-600" />
+              <SlidersHorizontal className="h-4 w-4 text-red-600" />
               Filtros de qualificação
             </div>
             <StatusBadge tone="slate">Tabela no desktop · cards no mobile</StatusBadge>
@@ -390,7 +390,7 @@ export function LeadsPageContent() {
             <div className="grid gap-2">
               <Label htmlFor="filter-status">Status</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="filter-status"
                 onChange={(event) =>
                   setFilters((current) => ({
@@ -411,7 +411,7 @@ export function LeadsPageContent() {
             <div className="grid gap-2">
               <Label htmlFor="filter-source">Origem</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="filter-source"
                 onChange={(event) =>
                   setFilters((current) => ({
@@ -432,7 +432,7 @@ export function LeadsPageContent() {
             <div className="grid gap-2">
               <Label htmlFor="filter-qualification">Qualificacao</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="filter-qualification"
                 onChange={(event) =>
                   setFilters((current) => ({
@@ -452,7 +452,7 @@ export function LeadsPageContent() {
             <div className="grid gap-2">
               <Label htmlFor="filter-site">Site</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="filter-site"
                 onChange={(event) =>
                   setFilters((current) => ({
@@ -470,7 +470,7 @@ export function LeadsPageContent() {
             <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
               <input
                 checked={filters.onlyWithPhone}
-                className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                 onChange={(event) =>
                   setFilters((current) => ({ ...current, onlyWithPhone: event.target.checked }))
                 }
@@ -512,12 +512,12 @@ export function LeadsPageContent() {
           ) : null}
           {isLoading ? (
             <div className="flex min-h-72 items-center justify-center gap-3 text-sm text-slate-500">
-              <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+              <Loader2 className="h-5 w-5 animate-spin text-red-600" />
               Carregando leads...
             </div>
           ) : leads.length === 0 ? (
             <div className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
-              <div className="mb-4 rounded-lg bg-purple-100 p-3 text-purple-700">
+              <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">
                 <Search className="h-6 w-6" />
               </div>
               <h2 className="text-lg font-semibold text-slate-950">Nenhum lead encontrado</h2>
@@ -532,7 +532,7 @@ export function LeadsPageContent() {
                 <input
                   aria-label="Selecionar todos os leads visiveis"
                   checked={allVisibleSelected}
-                  className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                   onChange={(event) => toggleAllVisible(event.target.checked)}
                   type="checkbox"
                 />
@@ -551,13 +551,13 @@ export function LeadsPageContent() {
                       <input
                         aria-label={`Selecionar ${lead.name}`}
                         checked={selectedLeadIds.has(lead.id)}
-                        className="mt-1 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                         onChange={(event) => toggleLeadSelection(lead.id, event.target.checked)}
                         type="checkbox"
                       />
                       <div className="min-w-0 flex-1">
                         <button
-                          className="text-left text-base font-semibold text-slate-950 hover:text-purple-700"
+                          className="text-left text-base font-semibold text-slate-950 hover:text-red-700"
                           onClick={() => openLeadModal(lead)}
                           type="button"
                         >
@@ -576,7 +576,7 @@ export function LeadsPageContent() {
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${instagram.className}`}>
                         {instagram.label}
                       </span>
-                      <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
                         {leadStatusLabels[lead.status]}
                       </span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
@@ -644,7 +644,7 @@ export function LeadsPageContent() {
                       <input
                         aria-label="Selecionar todos os leads visiveis"
                         checked={allVisibleSelected}
-                        className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                        className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                         onChange={(event) => toggleAllVisible(event.target.checked)}
                         type="checkbox"
                       />
@@ -667,12 +667,12 @@ export function LeadsPageContent() {
                     const websiteHref = getWebsiteHref(lead.website);
 
                     return (
-                    <tr className="transition hover:bg-purple-50/50" key={lead.id}>
+                    <tr className="transition hover:bg-red-50/50" key={lead.id}>
                       <td className="px-5 py-4 align-top">
                         <input
                           aria-label={`Selecionar ${lead.name}`}
                           checked={selectedLeadIds.has(lead.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                          className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                           onChange={(event) => toggleLeadSelection(lead.id, event.target.checked)}
                           type="checkbox"
                         />
@@ -680,7 +680,7 @@ export function LeadsPageContent() {
                       <td className="px-5 py-4">
                         <div className="text-left">
                           <button
-                            className="block text-left font-medium text-slate-950 hover:text-purple-700"
+                            className="block text-left font-medium text-slate-950 hover:text-red-700"
                             onClick={() => openLeadModal(lead)}
                             type="button"
                           >
@@ -745,7 +745,7 @@ export function LeadsPageContent() {
                             ) : null}
                             {lead.email ? (
                               <a
-                                className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700"
+                                className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
                                 href={`mailto:${lead.email}`}
                                 onClick={(event) => event.stopPropagation()}
                               >
@@ -759,7 +759,7 @@ export function LeadsPageContent() {
                       <td className="px-5 py-4 text-slate-600">{lead.city || "-"}</td>
                       <td className="px-5 py-4 text-slate-600">{lead.category || "-"}</td>
                       <td className="px-5 py-4">
-                        <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
                           {leadStatusLabels[lead.status]}
                         </span>
                       </td>

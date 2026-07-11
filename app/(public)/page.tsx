@@ -37,7 +37,7 @@ export default function HomePage() {
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-14 px-4 py-12 sm:px-6 lg:px-8">
       <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
         <div className="space-y-7">
-          <div className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-sm font-medium text-purple-700">
+          <div className="inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1 text-sm font-medium text-red-700">
             PubLeads · prospecção e abordagem B2B
           </div>
           <div className="space-y-4">
@@ -63,7 +63,7 @@ export default function HomePage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-premium">
           <div className="rounded-lg bg-slate-950 p-5 text-white">
-            <p className="text-sm font-medium text-purple-200">Cockpit comercial</p>
+            <p className="text-sm font-medium text-red-200">Cockpit comercial</p>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               <div className="rounded-lg bg-white/10 p-4">
                 <p className="text-xs text-slate-300">Leads com canal</p>
@@ -80,7 +80,7 @@ export default function HomePage() {
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-emerald-50 px-2 py-1 font-medium text-emerald-700">WhatsApp possível</span>
                 <span className="rounded-full bg-pink-50 px-2 py-1 font-medium text-pink-700">Instagram</span>
-                <span className="rounded-full bg-purple-50 px-2 py-1 font-medium text-purple-700">Pipeline</span>
+                <span className="rounded-full bg-red-50 px-2 py-1 font-medium text-red-700">Pipeline</span>
               </div>
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function HomePage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {workflow.map((item) => (
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" key={item.title}>
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-purple-50 text-purple-700">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-red-50 text-red-700">
               <item.icon className="h-5 w-5" />
             </div>
             <h2 className="font-semibold text-slate-950">{item.title}</h2>
@@ -108,7 +108,7 @@ export default function HomePage() {
           <div className="flex flex-wrap gap-2">
             {sources.map((source) => (
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700" key={source.label}>
-                <source.icon className="h-4 w-4 text-purple-700" />
+                <source.icon className="h-4 w-4 text-red-700" />
                 {source.label}
               </span>
             ))}

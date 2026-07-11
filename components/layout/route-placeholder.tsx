@@ -14,7 +14,7 @@ export function RoutePlaceholder({ title, description, icon: Icon }: RoutePlaceh
     <DashboardPageShell description={description} title={title}>
       <Card className="border-dashed border-slate-300 bg-white shadow-sm">
         <CardContent className="flex min-h-[280px] flex-col items-center justify-center p-8 text-center">
-          <div className="mb-4 rounded-lg bg-purple-100 p-3 text-purple-700">
+          <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">
             <Icon className="h-6 w-6" />
           </div>
           <h2 className="text-lg font-semibold text-slate-950">{title}</h2>

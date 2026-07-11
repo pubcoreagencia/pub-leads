@@ -15,7 +15,7 @@ export function PageHeader({ actions, description, eyebrow, title }: PageHeaderP
     <div className="flex flex-col gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end sm:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-purple-700">{eyebrow}</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-red-700">{eyebrow}</p>
         ) : null}
         <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">{title}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
@@ -51,7 +51,7 @@ export function SectionCard({ actions, children, className, description, title }
 }
 
 type MetricCardProps = {
-  accent?: "purple" | "emerald" | "blue" | "amber" | "slate" | "pink";
+  accent?: "red" | "emerald" | "blue" | "amber" | "slate" | "pink";
   icon: LucideIcon;
   label: string;
   value: ReactNode;
@@ -63,11 +63,11 @@ const metricAccent = {
   blue: "bg-blue-50 text-blue-700",
   emerald: "bg-emerald-50 text-emerald-700",
   pink: "bg-pink-50 text-pink-700",
-  purple: "bg-purple-50 text-purple-700",
+  red: "bg-red-50 text-red-700",
   slate: "bg-slate-100 text-slate-700",
 };
 
-export function MetricCard({ accent = "purple", helper, icon: Icon, label, value }: MetricCardProps) {
+export function MetricCard({ accent = "red", helper, icon: Icon, label, value }: MetricCardProps) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -94,7 +94,7 @@ type EmptyStateProps = {
 export function EmptyState({ action, description, icon: Icon, title }: EmptyStateProps) {
   return (
     <div className="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/70 p-8 text-center">
-      <div className="mb-4 rounded-lg bg-white p-3 text-purple-700 shadow-sm">
+      <div className="mb-4 rounded-lg bg-white p-3 text-red-700 shadow-sm">
         <Icon className="h-6 w-6" />
       </div>
       <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
@@ -107,7 +107,7 @@ export function EmptyState({ action, description, icon: Icon, title }: EmptyStat
 export function LoadingState({ label }: { label: string }) {
   return (
     <div className="flex min-h-64 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
-      <span className="mr-2 h-2.5 w-2.5 animate-pulse rounded-full bg-purple-600" />
+      <span className="mr-2 h-2.5 w-2.5 animate-pulse rounded-full bg-red-600" />
       {label}
     </div>
   );
@@ -115,7 +115,7 @@ export function LoadingState({ label }: { label: string }) {
 
 type StatusBadgeProps = {
   children: ReactNode;
-  tone?: "purple" | "emerald" | "blue" | "amber" | "red" | "slate" | "pink";
+  tone?: "emerald" | "blue" | "amber" | "red" | "slate" | "pink";
 };
 
 const badgeTone = {
@@ -123,7 +123,6 @@ const badgeTone = {
   blue: "bg-blue-50 text-blue-700 ring-blue-200",
   emerald: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   pink: "bg-pink-50 text-pink-700 ring-pink-200",
-  purple: "bg-purple-50 text-purple-700 ring-purple-200",
   red: "bg-red-50 text-red-700 ring-red-200",
   slate: "bg-slate-100 text-slate-700 ring-slate-200",
 };

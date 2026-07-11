@@ -38,7 +38,7 @@ export function AuthCard({
               <label className="grid gap-2 text-sm font-medium text-slate-700" key={field.label}>
                 {field.label}
                 <input
-                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none transition focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   placeholder={field.label}
                   type={field.type}
                 />
@@ -49,7 +49,7 @@ export function AuthCard({
             </Button>
           </form>
           <div className="mt-5 text-center text-sm text-slate-500">
-            <Link className="font-medium text-purple-700 hover:text-purple-800" href={secondaryHref}>
+            <Link className="font-medium text-red-700 hover:text-red-800" href={secondaryHref}>
               {secondaryLabel}
             </Link>
           </div>

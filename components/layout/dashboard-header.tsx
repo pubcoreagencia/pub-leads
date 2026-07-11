@@ -42,7 +42,7 @@ export function DashboardHeader({
             <p className="text-sm font-medium text-slate-950">{userName}</p>
             <p className="text-xs text-slate-500">Workspace ativo</p>
           </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-100 text-sm font-semibold text-purple-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-sm font-semibold text-red-700">
             {userInitials}
           </div>
           <LogoutButton compact />

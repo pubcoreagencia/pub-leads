@@ -48,7 +48,7 @@ export default async function CheckoutPlanPage({
     <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-2xl items-center px-4 py-10">
       <Card className="w-full border-slate-200 bg-white shadow-premium">
         <CardHeader>
-          <div className="mb-3 inline-flex rounded-full border border-purple-200 bg-purple-50 px-3 py-1 text-xs font-semibold text-purple-700">
+          <div className="mb-3 inline-flex rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
             Checkout mock
           </div>
           <CardTitle>{copy.name}</CardTitle>
@@ -57,7 +57,7 @@ export default async function CheckoutPlanPage({
         <CardContent className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-start gap-3">
-              <BadgeInfo className="mt-0.5 h-5 w-5 text-purple-700" />
+              <BadgeInfo className="mt-0.5 h-5 w-5 text-red-700" />
               <div className="space-y-2 text-sm leading-6 text-slate-600">
                 <p>{copy.note}</p>
                 <p className="flex items-center gap-2 text-emerald-700">

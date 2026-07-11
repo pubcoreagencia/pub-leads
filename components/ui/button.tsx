@@ -9,10 +9,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-sm hover:bg-purple-700",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-red-700",
         outline:
-          "border border-input bg-white text-slate-900 shadow-sm hover:bg-slate-50 hover:text-purple-700",
-        ghost: "text-slate-600 hover:bg-purple-50 hover:text-purple-700",
+          "border border-input bg-white text-slate-900 shadow-sm hover:bg-slate-50 hover:text-red-700",
+        ghost: "text-slate-600 hover:bg-red-50 hover:text-red-700",
       },
       size: {
         default: "h-10 px-4 py-2",

@@ -10,7 +10,7 @@ export function PublicLayout({ children }: Readonly<{ children: ReactNode }>) {
       <header className="border-b border-slate-200/70 bg-white/80 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link className="flex items-center gap-2 font-semibold text-slate-950" href="/">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-600 text-white">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-600 text-white">
               <Sparkles className="h-4 w-4" />
             </span>
             PubLeads

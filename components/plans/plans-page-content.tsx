@@ -24,14 +24,14 @@ export function PlansPageContent({ usage }: PlansPageContentProps) {
   return (
     <section className="space-y-6">
       <PageHeader
-        actions={<StatusBadge tone={usage.plan.limits.leadLimit === null ? "amber" : "purple"}>{usage.plan.name}</StatusBadge>}
+        actions={<StatusBadge tone={usage.plan.limits.leadLimit === null ? "amber" : "red"}>{usage.plan.name}</StatusBadge>}
         description="Acompanhe limites, uso mensal e diferenças entre planos. Cobrança fica na aba Assinatura."
         eyebrow="Plano e limites"
         title="Planos"
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-purple-200 bg-white shadow-sm">
+        <Card className="border-red-200 bg-white shadow-sm">
           <CardHeader>
             <CardTitle>Plano atual</CardTitle>
           </CardHeader>
@@ -76,7 +76,7 @@ export function PlansPageContent({ usage }: PlansPageContentProps) {
               <div
                 className={cn(
                   "rounded-lg border border-slate-200 p-5",
-                  isCurrent && "border-purple-400 bg-purple-50",
+                  isCurrent && "border-red-400 bg-red-50",
                   plan.lifetime && "border-amber-300 bg-amber-50/60",
                 )}
                 key={plan.id}
@@ -86,7 +86,7 @@ export function PlansPageContent({ usage }: PlansPageContentProps) {
                     <p className="text-xs font-semibold tracking-wide text-slate-500">{plan.type}</p>
                     <h2 className="mt-2 text-lg font-semibold text-slate-950">{plan.name}</h2>
                   </div>
-                  {isCurrent ? <CheckCircle2 className="h-5 w-5 text-purple-700" /> : null}
+                  {isCurrent ? <CheckCircle2 className="h-5 w-5 text-red-700" /> : null}
                 </div>
                 <p className="mt-4 text-2xl font-semibold text-slate-950">{plan.price}</p>
                 <dl className="mt-5 grid gap-3 text-sm text-slate-600">

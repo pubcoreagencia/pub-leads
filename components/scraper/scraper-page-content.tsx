@@ -1259,11 +1259,11 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
           return (
             <div
-              className={`rounded-lg border p-4 ${active ? "border-purple-300 bg-purple-50" : "border-slate-200 bg-white"}`}
+              className={`rounded-lg border p-4 ${active ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"}`}
               key={step.label}
             >
               <div className="flex items-center gap-2">
-                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-purple-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-red-600 text-white" : "bg-slate-100 text-slate-600"}`}>
                   {index + 1}
                 </span>
                 <p className="text-sm font-semibold text-slate-950">{step.label}</p>
@@ -1276,18 +1276,18 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
       {isLoadingSession ? (
         <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+          <Loader2 className="h-4 w-4 animate-spin text-red-600" />
           Restaurando ultima busca...
         </div>
       ) : currentSession ? (
-        <div className="rounded-lg border border-purple-100 bg-purple-50/70 p-4">
+        <div className="rounded-lg border border-red-100 bg-red-50/70 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-semibold text-purple-950">
+                <span className="text-sm font-semibold text-red-950">
                   {currentSession.status === "running" ? "Busca em andamento" : "Ultima busca"}
                 </span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-purple-700">
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-red-700">
                   Busca salva automaticamente
                 </span>
                 {currentSession.status === "failed" ? (
@@ -1296,10 +1296,10 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                   </span>
                 ) : null}
               </div>
-              <p className="mt-1 text-sm leading-6 text-purple-900/80">
+              <p className="mt-1 text-sm leading-6 text-red-900/80">
                 Os resultados desta busca ficam salvos temporariamente ate voce salvar ou descartar.
               </p>
-              <p className="mt-1 text-xs text-purple-800/70">
+              <p className="mt-1 text-xs text-red-800/70">
                 {sourceLabels[(currentSession.source as LeadSearchSource)] ?? currentSession.source}
                 {currentSession.city ? ` em ${currentSession.city}` : ""} · {results.filter((lead) => lead.saved).length} salvos / {results.filter((lead) => !lead.saved).length} pendentes
               </p>
@@ -1332,7 +1332,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               <div className="grid gap-2 xl:col-span-3">
                 <Label htmlFor="source">Fonte de teste</Label>
                 <select
-                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="source"
                   onChange={(event) => handleSourceChange(event.target.value as LeadSearchSource)}
                   value={form.source}
@@ -1372,7 +1372,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             )}
 
             {canSelectSource && form.source === "apify_google_maps" ? (
-              <div className="grid gap-2 rounded-md border border-purple-100 bg-purple-50/40 p-3 md:col-span-2 xl:col-span-5">
+              <div className="grid gap-2 rounded-md border border-red-100 bg-red-50/40 p-3 md:col-span-2 xl:col-span-5">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <Label htmlFor="apify-source">Fonte Apify disponivel</Label>
                   <Button
@@ -1386,7 +1386,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                   </Button>
                 </div>
                 <select
-                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   disabled={!apifyEnabled || isSearching}
                   id="apify-source"
                   onChange={(event) => setSelectedApifySourceId(event.target.value)}
@@ -1448,7 +1448,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             <div className="grid gap-2 xl:col-span-2">
               <Label htmlFor="category">Categoria</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="category"
                 onChange={(event) => updateField("category", event.target.value as LeadCategoryId)}
                 value={form.category}
@@ -1493,7 +1493,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithPhone}
-                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                     onChange={(event) => updateField("onlyWithPhone", event.target.checked)}
                     type="checkbox"
                   />
@@ -1502,7 +1502,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithoutWebsite}
-                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                     onChange={(event) => updateField("onlyWithoutWebsite", event.target.checked)}
                     type="checkbox"
                   />
@@ -1516,7 +1516,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithPhone}
-                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                     onChange={(event) => updateField("onlyWithPhone", event.target.checked)}
                     type="checkbox"
                   />
@@ -1525,7 +1525,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <label className="flex h-11 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
                   <input
                     checked={form.onlyWithWebsite}
-                    className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                     onChange={(event) => updateField("onlyWithWebsite", event.target.checked)}
                     type="checkbox"
                   />
@@ -1538,7 +1538,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600 xl:col-span-4">
                 <input
                   checked={form.onlyWithPhone}
-                  className="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                  className="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                   onChange={(event) => updateField("onlyWithPhone", event.target.checked)}
                   type="checkbox"
                 />
@@ -1574,7 +1574,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             <div className="grid gap-2 sm:min-w-72">
               <Label htmlFor="qualification-filter">Filtro de qualificacao</Label>
               <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                 id="qualification-filter"
                 onChange={(event) => setQualificationFilter(event.target.value as QualificationFilter)}
                 value={qualificationFilter}
@@ -1623,7 +1623,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
       {isSearching ? (
         <div className="flex min-h-72 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin text-purple-600" />
+          <Loader2 className="mr-2 h-5 w-5 animate-spin text-red-600" />
           Consultando {sourceLabels[form.source]}...
         </div>
       ) : visibleResults.length > 0 ? (
@@ -1642,7 +1642,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                     <input
                       aria-label={`Selecionar ${lead.name}`}
                       checked={selectedResultIds.has(getLeadIdentifier(lead))}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500"
                       disabled={lead.saved}
                       onChange={(event) => toggleResultSelection(lead, event.target.checked)}
                       type="checkbox"
@@ -1656,7 +1656,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                         </span>
                       ) : null}
                       {lead.source === "cnpj_brasil" ? (
-                        <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
                           CNPJ
                         </span>
                       ) : null}
@@ -1671,7 +1671,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                         </span>
                       ) : null}
                       {lead.source === "apify_instagram" || lead.source === "apify_google_search" || lead.source === "apify_generic" ? (
-                        <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
                           Apify
                         </span>
                       ) : null}
@@ -1715,19 +1715,19 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <div className="mt-4 grid gap-2 text-sm text-slate-600">
                   {lead.address ? <p>{lead.address}</p> : <p className="text-slate-400">Endereco nao disponivel</p>}
                   <div className="flex items-center gap-2 text-slate-500">
-                    <MapPin className="h-4 w-4 text-purple-600" />
+                    <MapPin className="h-4 w-4 text-red-600" />
                     <span>
                       {lead.city}, {lead.state}, {lead.country}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-slate-500">
-                    <Phone className="h-4 w-4 text-purple-600" />
+                    <Phone className="h-4 w-4 text-red-600" />
                     <span>Telefone: {getContactPhone(lead) ?? "nao disponivel"}</span>
                   </div>
                   {lead.phone2 ? <p>Telefone 2: {lead.phone2}</p> : null}
                   {lead.email ? (
                     <a
-                      className="inline-flex w-fit items-center gap-1 font-medium text-purple-700 hover:text-purple-800"
+                      className="inline-flex w-fit items-center gap-1 font-medium text-red-700 hover:text-red-800"
                       href={`mailto:${lead.email}`}
                     >
                       <Mail className="h-4 w-4" />
@@ -1739,7 +1739,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                   {lead.cnpj ? <p>CNPJ: {lead.cnpj}</p> : null}
                   {lead.cnae ? (
                     <div className="flex items-start gap-2 text-slate-500">
-                      <Building2 className="mt-0.5 h-4 w-4 text-purple-600" />
+                      <Building2 className="mt-0.5 h-4 w-4 text-red-600" />
                       <span>CNAE: {lead.cnaeDescription ?? lead.cnae}</span>
                     </div>
                   ) : null}
@@ -1795,7 +1795,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                       Fonte: Google Maps Platform.
                       {lead.sourceUrl ? (
                         <a
-                          className="inline-flex items-center gap-1 font-medium text-purple-700 hover:text-purple-800"
+                          className="inline-flex items-center gap-1 font-medium text-red-700 hover:text-red-800"
                           href={lead.sourceUrl}
                           rel="noreferrer"
                           target="_blank"
@@ -1821,7 +1821,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         </div>
       ) : hasSearched ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-          <div className="mb-4 rounded-lg bg-purple-100 p-3 text-purple-700">
+          <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">
             <Search className="h-6 w-6" />
           </div>
           <h2 className="text-lg font-semibold text-slate-950">Nenhum lead encontrado</h2>

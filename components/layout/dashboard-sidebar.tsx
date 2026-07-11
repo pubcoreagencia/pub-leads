@@ -17,13 +17,13 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   return (
     <aside className="flex h-full w-full flex-col border-r border-slate-900 bg-slate-950 px-4 py-5 text-white">
       <Link className="mb-7 block px-1" href="/app/dashboard" onClick={onNavigate}>
-        <span className="flex h-20 items-center rounded-lg bg-white px-4 shadow-sm">
+        <span className="flex h-20 items-center rounded-lg px-2">
           <Image
             alt="PubLeads"
             className="h-16 w-auto object-contain"
             height={88}
             src="/brand/publeads-logo.png"
-            width={140}
+            width={180}
           />
         </span>
       </Link>
@@ -44,7 +44,7 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
           </div>
           <p className="mt-2 text-xs leading-5 text-slate-300">Abra a fila de abordagem para continuar contatos manuais sem perder contexto.</p>
           <Link
-            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-purple-200 hover:text-white"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-red-200 hover:text-white"
             href="/app/whatsapp"
             onClick={onNavigate}
           >

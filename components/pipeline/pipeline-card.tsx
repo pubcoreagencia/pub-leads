@@ -34,8 +34,8 @@ export function PipelineCard({ lead }: PipelineCardProps) {
   return (
     <article
       className={cn(
-        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-purple-200",
-        isDragging && "z-20 scale-[0.98] opacity-60 shadow-lg ring-2 ring-purple-200",
+        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-red-200",
+        isDragging && "z-20 scale-[0.98] opacity-60 shadow-lg ring-2 ring-red-200",
       )}
       ref={setNodeRef}
       style={style}

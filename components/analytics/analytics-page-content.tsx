@@ -25,7 +25,7 @@ type AnalyticsPageContentProps = {
   summary: AnalyticsSummary;
 };
 
-const chartColors = ["#7c3aed", "#d4a017", "#0f766e", "#2563eb", "#db2777", "#475569"];
+const chartColors = ["#ef1b24", "#111827", "#0f766e", "#2563eb", "#db2777", "#d4a017"];
 
 function formatNumber(value: number) {
   return value.toLocaleString("pt-BR");
@@ -90,7 +90,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <MetricCard
-            accent={stat.label === "Taxa de conversão" ? "emerald" : "purple"}
+            accent={stat.label === "Taxa de conversão" ? "emerald" : "red"}
             icon={stat.icon}
             key={stat.label}
             label={stat.label}
@@ -107,7 +107,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
         <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {qualificationStats.map((stat) => (
             <div className="flex items-center gap-3 rounded-lg border border-slate-200 p-4" key={stat.label}>
-              <stat.icon className="h-4 w-4 text-purple-600" />
+              <stat.icon className="h-4 w-4 text-red-600" />
               <div>
                 <p className="text-xs text-slate-500">{stat.label}</p>
                 <p className="mt-1 text-lg font-semibold text-slate-950">{stat.value}</p>
@@ -134,7 +134,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
                     activeDot={{ r: 6 }}
                     dataKey="value"
                     name="Leads"
-                    stroke="#7c3aed"
+                    stroke="#ef1b24"
                     strokeWidth={3}
                     type="monotone"
                   />
@@ -155,7 +155,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
                   <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 12 }} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fill: "#64748b", fontSize: 12 }} tickLine={false} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#7c3aed" name="Buscas" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="value" fill="#ef1b24" name="Buscas" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -181,7 +181,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
                     width={90}
                   />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#7c3aed" name="Leads" radius={[0, 6, 6, 0]} />
+                  <Bar dataKey="value" fill="#ef1b24" name="Leads" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -265,7 +265,7 @@ export function AnalyticsPageContent({ summary }: AnalyticsPageContentProps) {
             <CardTitle>Resumo operacional</CardTitle>
             <CardDescription>Uso do plano e resultado comercial atual.</CardDescription>
           </div>
-          <Target className="h-5 w-5 text-purple-600" />
+          <Target className="h-5 w-5 text-red-600" />
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-slate-200 p-4">

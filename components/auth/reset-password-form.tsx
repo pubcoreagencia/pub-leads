@@ -116,7 +116,7 @@ export function ResetPasswordForm() {
         <CardContent>
           {checkingSession ? (
             <div className="flex min-h-44 items-center justify-center gap-2 text-sm text-slate-500">
-              <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-red-600" />
               Verificando sessão...
             </div>
           ) : !hasSession ? (

@@ -52,7 +52,7 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <MetricCard accent="purple" helper="Base salva no Turso" icon={Users} label="Leads totais" value={summary.totals.leads} />
+        <MetricCard accent="red" helper="Base salva no Turso" icon={Users} label="Leads totais" value={summary.totals.leads} />
         <MetricCard accent="blue" helper="Buscas registradas" icon={Search} label="Buscas" value={summary.totals.searches} />
         <MetricCard accent="emerald" helper="Possível ou confirmado" icon={MessageCircle} label="Com WhatsApp" value={summary.qualification.possibleWhatsapp} />
         <MetricCard accent="pink" helper="Canal alternativo" icon={Instagram} label="Com Instagram" value={summary.qualification.withInstagram} />
@@ -75,8 +75,8 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
         <SectionCard description="Limites e uso precisam orientar ritmo de prospecção." title="Operação atual">
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
-              <p className="text-sm text-purple-700">Plano atual</p>
+            <div className="rounded-lg border border-red-100 bg-red-50 p-4">
+              <p className="text-sm text-red-700">Plano atual</p>
               <p className="mt-1 text-2xl font-semibold text-slate-950">{summary.usage.plan.name}</p>
             </div>
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
@@ -101,7 +101,7 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
                 <div className="truncate text-sm text-slate-600">{item.label}</div>
                 <div className="h-2.5 rounded-full bg-slate-100">
                   <div
-                    className="h-2.5 rounded-full bg-purple-600"
+                    className="h-2.5 rounded-full bg-red-600"
                     style={{ width: `${summary.totals.leads > 0 ? Math.max((item.value / summary.totals.leads) * 100, item.value > 0 ? 8 : 0) : 0}%` }}
                   />
                 </div>
@@ -133,7 +133,7 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
                     <p className="font-semibold text-slate-950">{lead.name}</p>
                     <p className="mt-1 text-sm text-slate-500">{[lead.category, lead.city].filter(Boolean).join(" · ") || "Sem detalhes"}</p>
                   </div>
-                  <StatusBadge tone="purple">{leadStatusLabels[lead.status]}</StatusBadge>
+                  <StatusBadge tone="red">{leadStatusLabels[lead.status]}</StatusBadge>
                 </div>
                 <div className="mt-4 flex items-center justify-between gap-3">
                   <span className="text-xs text-slate-400">{formatDate(lead.createdAt)}</span>

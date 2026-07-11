@@ -111,19 +111,19 @@ export function PipelinePageContent() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard accent="purple" icon={Users} label="Leads no pipeline" value={leads.length} />
+        <MetricCard accent="red" icon={Users} label="Leads no pipeline" value={leads.length} />
         <MetricCard accent="blue" icon={TrendingUp} label="Ativos" value={activeLeads} />
         <MetricCard accent="emerald" helper={`${wonLeads} ganhos`} icon={Target} label="Em contato" value={contactedLeads} />
       </div>
 
       {isLoading ? (
         <div className="flex min-h-72 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin text-purple-600" />
+          <Loader2 className="mr-2 h-5 w-5 animate-spin text-red-600" />
           Carregando pipeline...
         </div>
       ) : leads.length === 0 ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-          <div className="mb-4 rounded-lg bg-purple-100 p-3 text-purple-700">
+          <div className="mb-4 rounded-lg bg-red-100 p-3 text-red-700">
             <RefreshCw className="h-6 w-6" />
           </div>
           <h2 className="text-lg font-semibold text-slate-950">Pipeline vazio</h2>

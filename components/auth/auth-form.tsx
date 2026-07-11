@@ -217,7 +217,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           </form>
 
           <div className="mt-5 text-center text-sm text-slate-500">
-            <Link className="font-medium text-purple-700 hover:text-purple-800" href={copy.secondaryHref}>
+            <Link className="font-medium text-red-700 hover:text-red-800" href={copy.secondaryHref}>
               {copy.secondaryLabel}
             </Link>
           </div>

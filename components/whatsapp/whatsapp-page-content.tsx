@@ -301,19 +301,19 @@ export function WhatsAppPageContent() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard accent="purple" icon={Users} label="Leads carregados" value={leads.length} />
+        <MetricCard accent="red" icon={Users} label="Leads carregados" value={leads.length} />
         <MetricCard accent="emerald" icon={MessageCircle} label="WhatsApp possível" value={whatsappReadyCount} />
         <MetricCard accent="pink" icon={Instagram} label="Instagram sem WhatsApp" value={instagramOnlyCount} />
       </div>
 
       {isLoadingLeads ? (
         <div className="flex min-h-72 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+          <Loader2 className="h-4 w-4 animate-spin text-red-600" />
           Carregando leads...
         </div>
       ) : leads.length === 0 ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
-          <MessageCircle className="mb-4 h-7 w-7 text-purple-600" />
+          <MessageCircle className="mb-4 h-7 w-7 text-red-600" />
           <h2 className="text-lg font-semibold text-slate-950">Nenhum lead disponível</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Salve leads na Prospecção para iniciar uma abordagem manual.</p>
         </div>
@@ -342,7 +342,7 @@ export function WhatsAppPageContent() {
 
                 return (
                   <button
-                    className={`w-full rounded-md border p-3 text-left transition ${active ? "border-purple-300 bg-purple-50" : "border-slate-200 hover:border-purple-200 hover:bg-slate-50"}`}
+                    className={`w-full rounded-md border p-3 text-left transition ${active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"}`}
                     key={lead.id}
                     onClick={() => setLeadId(lead.id)}
                     type="button"
@@ -375,7 +375,7 @@ export function WhatsAppPageContent() {
               <div className="grid gap-2">
                 <Label htmlFor="copyBase">Copy base</Label>
                 <textarea
-                  className="min-h-40 w-full rounded-md border border-input bg-white p-3 text-sm leading-6 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="min-h-40 w-full rounded-md border border-input bg-white p-3 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="copyBase"
                   onChange={(event) => { setCopyBase(event.target.value); setMessage(""); setMessageId(null); }}
                   placeholder="Ex: Olá LEAD, estamos selecionando empresas do nicho COPY em CIDADE. Posso te enviar mais detalhes?"
@@ -397,7 +397,7 @@ export function WhatsAppPageContent() {
               <div className="border-t border-slate-100 pt-5">
                 <Label htmlFor="diversifiedMessage">Mensagem diversificada</Label>
                 <textarea
-                  className="mt-2 min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  className="mt-2 min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="diversifiedMessage"
                   onChange={(event) => setMessage(event.target.value)}
                   placeholder="A mensagem diversificada aparecerá aqui."

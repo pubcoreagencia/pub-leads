@@ -60,7 +60,7 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        premium: "0 18px 50px -28px rgb(88 28 135 / 0.35)",
+        premium: "0 18px 50px -28px rgb(220 38 38 / 0.30)",
       },
     },
   },

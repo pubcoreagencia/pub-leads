@@ -20,7 +20,7 @@ export function PlanCard({ loading = false, loadingIcon, plan, onSubscribe }: Pl
     <Card
       className={cn(
         "relative flex h-full flex-col overflow-hidden border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-premium",
-        plan.featured && "border-purple-500 shadow-premium",
+        plan.featured && "border-red-500 shadow-premium",
         plan.lifetime && "border-amber-300 bg-amber-50/45",
       )}
     >
@@ -30,7 +30,7 @@ export function PlanCard({ loading = false, loadingIcon, plan, onSubscribe }: Pl
             "absolute right-4 top-4 rounded-full px-3 py-1 text-xs font-semibold tracking-wide",
             plan.lifetime
               ? "bg-amber-100 text-amber-800"
-              : "bg-purple-100 text-purple-700",
+              : "bg-red-100 text-red-700",
           )}
         >
           {plan.badge}
@@ -41,7 +41,7 @@ export function PlanCard({ loading = false, loadingIcon, plan, onSubscribe }: Pl
         <div
           className={cn(
             "mb-5 flex h-11 w-11 items-center justify-center rounded-lg",
-            plan.lifetime ? "bg-amber-100 text-amber-700" : "bg-purple-100 text-purple-700",
+            plan.lifetime ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700",
           )}
         >
           <Icon className="h-5 w-5" />
@@ -62,7 +62,7 @@ export function PlanCard({ loading = false, loadingIcon, plan, onSubscribe }: Pl
         <ul className="mt-6 grid gap-3 text-sm text-slate-600">
           {plan.benefits.map((benefit) => (
             <li className="flex items-start gap-2" key={benefit}>
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-purple-50 text-purple-700">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-700">
                 <Check className="h-3.5 w-3.5" />
               </span>
               <span>{benefit}</span>

@@ -24,7 +24,7 @@ export function PipelineColumn({ column, leads }: PipelineColumnProps) {
     <section
       className={cn(
         "flex min-h-[420px] flex-col rounded-lg border border-slate-200 bg-slate-50/80",
-        isOver && "border-purple-300 bg-purple-50 ring-2 ring-purple-100",
+        isOver && "border-red-300 bg-red-50 ring-2 ring-red-100",
       )}
       ref={setNodeRef}
     >

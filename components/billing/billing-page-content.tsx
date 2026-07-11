@@ -59,7 +59,7 @@ export function BillingPageContent() {
   return (
     <section className="space-y-8">
       <PageHeader
-        actions={<StatusBadge tone="purple">Gestao de cobranca</StatusBadge>}
+        actions={<StatusBadge tone="red">Gestao de cobranca</StatusBadge>}
         description="Gerencie assinatura e pagamentos sem misturar isso com a tela de uso do plano."
         eyebrow="Assinatura"
         title="Assinatura"
