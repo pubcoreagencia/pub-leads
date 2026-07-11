@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, MessageCircle, Sparkles } from "lucide-react";
+import Image from "next/image";
+import { ArrowRight, MessageCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { LogoutButton } from "@/components/layout/logout-button";
@@ -15,9 +16,16 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
 
   return (
     <aside className="flex h-full w-full flex-col border-r border-slate-900 bg-slate-950 px-4 py-5 text-white">
-      <Link className="mb-8 flex items-center gap-3 px-2" href="/app/dashboard" onClick={onNavigate}>
-        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-600 text-white"><Sparkles className="h-5 w-5" /></span>
-        <span><span className="block text-sm font-semibold text-white">PubLeads</span><span className="block text-xs text-slate-400">Cockpit comercial</span></span>
+      <Link className="mb-7 block px-1" href="/app/dashboard" onClick={onNavigate}>
+        <span className="flex h-20 items-center rounded-lg bg-white px-4 shadow-sm">
+          <Image
+            alt="PubLeads"
+            className="h-16 w-auto object-contain"
+            height={88}
+            src="/brand/publeads-logo.png"
+            width={140}
+          />
+        </span>
       </Link>
 
       <nav className="grid gap-1">
