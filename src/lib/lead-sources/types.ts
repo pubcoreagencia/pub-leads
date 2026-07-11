@@ -2,7 +2,13 @@ import type { LeadCategoryId } from "@/config/lead-categories";
 import type { Lead } from "@/schemas/lead";
 import type { LeadQualification } from "@/src/lib/lead-qualification/qualifier";
 
-export type LeadSourceId = "openstreetmap" | "cnpj_brasil" | "google_places";
+export type LeadSourceId =
+  | "openstreetmap"
+  | "cnpj_brasil"
+  | "google_places"
+  | "apify_instagram"
+  | "apify_google_search"
+  | "apify_generic";
 
 export type LeadSourceSearchParams = {
   city: string;

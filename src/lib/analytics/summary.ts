@@ -70,6 +70,9 @@ const sourceLabels: Record<LeadSource, string> = {
   manual: "Manual",
   openstreetmap: "OpenStreetMap",
   overpass: "Overpass",
+  apify_instagram: "Apify Instagram",
+  apify_google_search: "Apify Google Search",
+  apify_generic: "Apify Generic",
 };
 
 function dateKey(value: string) {

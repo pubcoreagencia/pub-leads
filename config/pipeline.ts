@@ -33,4 +33,7 @@ export const leadSourceLabels = {
   manual: "Manual",
   google_places: "Google Places",
   cnpj_brasil: "CNPJ Brasil",
+  apify_instagram: "Apify Instagram",
+  apify_google_search: "Apify Google Search",
+  apify_generic: "Apify Generic",
 } as const;

@@ -17,6 +17,9 @@ export const leadSourceSchema = z.enum([
   "manual",
   "google_places",
   "cnpj_brasil",
+  "apify_instagram",
+  "apify_google_search",
+  "apify_generic",
 ]);
 
 export const leadFormSchema = z.object({

@@ -99,6 +99,22 @@ type ApifyAvailability = {
   usedBudgetUsd?: number;
 };
 
+type ApifySourceDefinition = {
+  category: "google_maps" | "instagram" | "google_search" | "generic";
+  description?: string | null;
+  enabled: boolean;
+  estimatedCostLabel?: string;
+  id: string;
+  isRecommended: boolean;
+  kind: "actor" | "task";
+  name: string;
+  supportedUse?: string;
+};
+
+type ApifySourcesPayload = ApifyAvailability & {
+  sources: ApifySourceDefinition[];
+};
+
 const initialForm: SearchFormState = {
   source: "site_sales",
   city: "",
@@ -112,10 +128,13 @@ const initialForm: SearchFormState = {
   onlyWithoutWebsite: true,
 };
 
-const sourceLabels: Record<LeadSearchSource, string> = {
+const sourceLabels: Record<string, string> = {
+  apify_generic: "Apify",
+  apify_google_search: "Apify Google Search",
+  apify_instagram: "Apify Instagram",
   cnpj_brasil: "CNPJ Brasil",
   google_places: "Google Places oficial",
-  apify_google_maps: "Apify Google Maps",
+  apify_google_maps: "Apify",
   openstreetmap: "OpenStreetMap/Overpass",
   site_sales: "Venda de Sites",
 };
@@ -274,17 +293,46 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
   const [selectedResultIds, setSelectedResultIds] = useState<Set<string>>(new Set());
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [apifyAvailability, setApifyAvailability] = useState<ApifyAvailability>({ available: false });
+  const [apifySources, setApifySources] = useState<ApifySourceDefinition[]>([]);
+  const [selectedApifySourceId, setSelectedApifySourceId] = useState("");
+  const [isSyncingApifySources, setIsSyncingApifySources] = useState(false);
   const [currentSession, setCurrentSession] = useState<ScrapingSession | null>(null);
   const [isDiscardingSession, setIsDiscardingSession] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const apifyEnabled = apifyAvailability.available;
+  const selectedApifySource = useMemo(
+    () => apifySources.find((source) => source.id === selectedApifySourceId) ?? null,
+    [apifySources, selectedApifySourceId],
+  );
+  const apifyEnabled = apifyAvailability.available && apifySources.some((source) => source.enabled);
 
   useEffect(() => {
     let active = true;
-    fetch("/api/lead-sources/apify/status")
-      .then(async (response) => ({ payload: await response.json() as ApifyAvailability, response }))
-      .then(({ payload }) => { if (active) setApifyAvailability(payload); })
-      .catch(() => { if (active) setApifyAvailability({ available: false, reason: "missing_token" }); });
+    fetch("/api/lead-sources/apify/sources", { cache: "no-store" })
+      .then(async (response) => ({ payload: await response.json() as ApifySourcesPayload, response }))
+      .then(({ payload }) => {
+        if (!active) return;
+
+        setApifyAvailability(payload);
+        setApifySources(Array.isArray(payload.sources) ? payload.sources : []);
+        setSelectedApifySourceId((current) => {
+          if (current && payload.sources?.some((source) => source.id === current && source.enabled)) {
+            return current;
+          }
+
+          const nextSource =
+            payload.sources?.find((source) => source.enabled && source.isRecommended) ??
+            payload.sources?.find((source) => source.enabled);
+
+          return nextSource?.id ?? "";
+        });
+      })
+      .catch(() => {
+        if (active) {
+          setApifyAvailability({ available: false, reason: "missing_token" });
+          setApifySources([]);
+          setSelectedApifySourceId("");
+        }
+      });
     return () => { active = false; };
   }, []);
 
@@ -301,9 +349,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         typeof filters.qualificationFilter === "string"
           ? filters.qualificationFilter as QualificationFilter
           : "all";
+      const nextApifySourceId =
+        typeof filters.apifySourceId === "string" ? filters.apifySourceId : null;
 
       if (nextFilter in qualificationFilterLabels) {
         setQualificationFilter(nextFilter);
+      }
+
+      if (nextApifySourceId) {
+        setSelectedApifySourceId(nextApifySourceId);
       }
 
       setForm((current) => ({
@@ -511,12 +565,52 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     }));
   }
 
+  async function handleSyncApifySources() {
+    setIsSyncingApifySources(true);
+
+    try {
+      const payload = await fetch("/api/lead-sources/apify/sources/sync", { method: "POST" })
+        .then((response) => parseJsonResponse<{ sources: ApifySourceDefinition[] }>(response));
+
+      setApifySources(payload.sources);
+      setSelectedApifySourceId((current) => {
+        if (current && payload.sources.some((source) => source.id === current && source.enabled)) {
+          return current;
+        }
+
+        const nextSource =
+          payload.sources.find((source) => source.enabled && source.isRecommended) ??
+          payload.sources.find((source) => source.enabled);
+
+        return nextSource?.id ?? "";
+      });
+      setApifyAvailability((current) => ({
+        ...current,
+        available: payload.sources.some((source) => source.enabled) && current.reason !== "budget_exceeded",
+        reason: payload.sources.some((source) => source.enabled) ? current.reason ?? "ok" : current.reason,
+      }));
+      toast({
+        title: "Fontes Apify atualizadas",
+        description: `${payload.sources.length} fontes encontradas na conta conectada.`,
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Nao foi possivel atualizar Apify",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsSyncingApifySources(false);
+    }
+  }
+
   async function createSearchSession(status: ScrapingSession["status"]) {
     const category = leadCategories.find((item) => item.id === form.category);
     const payload = await fetch("/api/scraping-sessions", {
       body: JSON.stringify({
         city: form.city,
-        filters: { form, qualificationFilter },
+        filters: { apifySourceId: selectedApifySourceId || null, form, qualificationFilter },
         niche: category?.label ?? form.category,
         query: category?.label ?? form.category,
         requested_limit: Number(form.limit),
@@ -580,8 +674,22 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       const limit = Math.min(Number(form.limit), form.source === "google_places" ? 60 : 100);
       await createSearchSession("running");
       if (form.source === "apify_google_maps") {
-        const started = await fetch("/api/lead-sources/apify/google-maps/start", {
-          body: JSON.stringify({ city: form.city, state: form.state, niche: category?.label ?? form.category, limit }),
+        if (!selectedApifySourceId) {
+          throw new Error("Selecione uma fonte Apify disponivel.");
+        }
+
+        const query = [category?.label ?? form.category, form.city, form.state, form.country]
+          .filter(Boolean)
+          .join(" ");
+        const started = await fetch("/api/lead-sources/apify/run/start", {
+          body: JSON.stringify({
+            city: form.city,
+            input: { query },
+            niche: category?.label ?? form.category,
+            requestedLimit: limit,
+            sourceId: selectedApifySourceId,
+            state: form.state,
+          }),
           headers: { "Content-Type": "application/json" }, method: "POST",
         }).then((response) => parseJsonResponse<{ budget: { limit: number; spent: number; estimated: number }; run: { run_id: string } }>(response));
         setQualificationProgress(`Apify em execução. Orçamento: US$ ${started.budget.spent.toFixed(2)} de US$ ${started.budget.limit.toFixed(2)}; estimativa US$ ${started.budget.estimated.toFixed(2)}.`);
@@ -706,25 +814,38 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       session = await createSearchSession("running");
 
       if (form.source === "apify_google_maps") {
-        const started = await fetch("/api/lead-sources/apify/google-maps/start", {
+        if (!selectedApifySourceId) {
+          throw new Error("Selecione uma fonte Apify disponivel.");
+        }
+
+        const query = [category?.label ?? form.category, form.city, form.state, form.country]
+          .filter(Boolean)
+          .join(" ");
+        const started = await fetch("/api/lead-sources/apify/run/start", {
           body: JSON.stringify({
             city: form.city,
-            limit,
+            input: { query },
             niche: category?.label ?? form.category,
+            requestedLimit: limit,
             sessionId: session.id,
+            sourceId: selectedApifySourceId,
             state: form.state,
           }),
           headers: { "Content-Type": "application/json" },
           method: "POST",
         }).then((response) =>
-          parseJsonResponse<{ budget: { limit: number; spent: number; estimated: number }; run: { run_id: string } }>(response),
+          parseJsonResponse<{
+            budget: { estimated: number; limit: number; spent: number };
+            run: { run_id: string };
+            source: ApifySourceDefinition;
+          }>(response),
         );
 
         await updateSearchSession(session.id, { apify_run_id: started.run.run_id, status: "running" });
         setQualificationProgress(`Apify em execucao. Orcamento: US$ ${started.budget.spent.toFixed(2)} de US$ ${started.budget.limit.toFixed(2)}; estimativa US$ ${started.budget.estimated.toFixed(2)}.`);
         toast({
           title: "Busca Apify iniciada",
-          description: "Voce pode sair desta tela; a busca sera restaurada ao voltar.",
+          description: `${started.source.name} esta rodando. Voce pode sair desta tela; a busca sera restaurada ao voltar.`,
           variant: "success",
         });
         return;
@@ -1179,47 +1300,87 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         <CardContent>
           <form className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-12" onSubmit={handleSearchWithSession}>
             {canSelectSource ? (
-            <div className="grid gap-2 xl:col-span-3">
-              <Label htmlFor="source">Fonte de teste</Label>
-              <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-                id="source"
-                onChange={(event) => handleSourceChange(event.target.value as LeadSearchSource)}
-                value={form.source}
-              >
-                <option value="site_sales">Venda de Sites (CNPJ + OSM)</option>
-                <option value="cnpj_brasil">CNPJ Brasil</option>
-                <option value="openstreetmap">OpenStreetMap/Overpass</option>
-                <option disabled={!googlePlacesEnabled} value="google_places">
-                  {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
-                </option>
-                <option disabled={!apifyEnabled} value="apify_google_maps">
-                  {apifyEnabled ? "Apify Google Maps (premium)" : apifyAvailability.reason === "budget_exceeded" ? "Apify Google Maps (orçamento atingido)" : "Apify Google Maps (indisponível)"}
-                </option>
-              </select>
-              <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
-              {apifyAvailability.monthlyBudgetUsd !== undefined ? (
-                <p className="text-xs leading-5 text-slate-500">
-                  Apify: US$ {(apifyAvailability.usedBudgetUsd ?? 0).toFixed(2)} de US$ {apifyAvailability.monthlyBudgetUsd.toFixed(2)} usados neste mês.
-                </p>
-              ) : null}
-              {!googlePlacesEnabled ? (
-                <p className="sr-only">
-                  Google Places está desativado nesta instalação até a chave ser configurada.
-                </p>
-              ) : null}
-            </div>
+              <div className="grid gap-2 xl:col-span-3">
+                <Label htmlFor="source">Fonte de teste</Label>
+                <select
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  id="source"
+                  onChange={(event) => handleSourceChange(event.target.value as LeadSearchSource)}
+                  value={form.source}
+                >
+                  <option value="site_sales">Venda de Sites (CNPJ + OSM)</option>
+                  <option value="cnpj_brasil">CNPJ Brasil</option>
+                  <option value="openstreetmap">OpenStreetMap/Overpass</option>
+                  <option disabled={!googlePlacesEnabled} value="google_places">
+                    {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
+                  </option>
+                  <option disabled={!apifyEnabled} value="apify_google_maps">
+                    {apifyEnabled
+                      ? "Apify - fontes disponiveis"
+                      : apifyAvailability.reason === "budget_exceeded"
+                        ? "Apify (orcamento atingido)"
+                        : "Apify (requer token ou permissao)"}
+                  </option>
+                </select>
+                <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
+                {apifyAvailability.monthlyBudgetUsd !== undefined ? (
+                  <p className="text-xs leading-5 text-slate-500">
+                    Apify: US$ {(apifyAvailability.usedBudgetUsd ?? 0).toFixed(2)} de US$ {apifyAvailability.monthlyBudgetUsd.toFixed(2)} usados neste mes.
+                  </p>
+                ) : null}
+                {!googlePlacesEnabled ? (
+                  <p className="sr-only">Google Places esta desativado nesta instalacao ate a chave ser configurada.</p>
+                ) : null}
+              </div>
             ) : (
               <div className="grid gap-2 xl:col-span-3">
                 <Label>Fonte da busca</Label>
                 <div className="flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
                   Venda de Sites
                 </div>
-                <p className="text-xs leading-5 text-slate-500">
-                  A busca será feita automaticamente pela melhor fonte disponível.
-                </p>
+                <p className="text-xs leading-5 text-slate-500">A busca sera feita automaticamente pela melhor fonte disponivel.</p>
               </div>
             )}
+
+            {canSelectSource && form.source === "apify_google_maps" ? (
+              <div className="grid gap-2 rounded-md border border-purple-100 bg-purple-50/40 p-3 md:col-span-2 xl:col-span-5">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Label htmlFor="apify-source">Fonte Apify disponivel</Label>
+                  <Button
+                    disabled={isSyncingApifySources || isSearching}
+                    onClick={() => void handleSyncApifySources()}
+                    type="button"
+                    variant="outline"
+                  >
+                    {isSyncingApifySources ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Atualizar fontes
+                  </Button>
+                </div>
+                <select
+                  className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  disabled={!apifyEnabled || isSearching}
+                  id="apify-source"
+                  onChange={(event) => setSelectedApifySourceId(event.target.value)}
+                  value={selectedApifySourceId}
+                >
+                  {apifySources.length === 0 ? (
+                    <option value="">Nenhuma fonte Apify encontrada</option>
+                  ) : null}
+                  {apifySources.map((source) => (
+                    <option disabled={!source.enabled} key={source.id} value={source.id}>
+                      {source.name} - {source.kind === "task" ? "Task" : "Actor"} - {source.category.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs leading-5 text-slate-600">
+                  {selectedApifySource
+                    ? `${selectedApifySource.supportedUse ?? "Executar fonte Apify"} ${selectedApifySource.estimatedCostLabel ? `Custo estimado: ${selectedApifySource.estimatedCostLabel}.` : ""}`
+                    : apifyAvailability.reason === "missing_token"
+                      ? "APIFY_TOKEN nao foi detectado no servidor."
+                      : "Sincronize a conta para listar tasks e actors disponiveis."}
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid gap-2 xl:col-span-3">
               <Label htmlFor="city">Cidade</Label>
@@ -1478,6 +1639,11 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                       {lead.source === "openstreetmap" ? (
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
                           OSM
+                        </span>
+                      ) : null}
+                      {lead.source === "apify_instagram" || lead.source === "apify_google_search" || lead.source === "apify_generic" ? (
+                        <span className="rounded-full bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
+                          Apify
                         </span>
                       ) : null}
                       <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${whatsapp.className}`}>

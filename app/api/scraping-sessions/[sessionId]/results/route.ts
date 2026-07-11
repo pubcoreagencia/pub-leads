@@ -44,7 +44,7 @@ const leadSchema = z
     saved: z.boolean().optional(),
     selected: z.boolean().optional(),
     sessionResultId: z.string().uuid().optional(),
-    source: z.enum(["openstreetmap", "cnpj_brasil", "google_places"]),
+    source: z.enum(["openstreetmap", "cnpj_brasil", "google_places", "apify_instagram", "apify_google_search", "apify_generic"]),
     sourcePlaceId: z.string().min(1).optional(),
     sourceUrl: nullableStringSchema,
     state: z.string().min(1),

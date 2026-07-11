@@ -64,6 +64,28 @@ async function ensureLeadQualificationColumns(client: ReturnType<typeof createCl
   await client.execute("create index if not exists leads_user_whatsapp_status_idx on leads(user_id, whatsapp_status)");
 }
 
+async function ensureApifyRunSourceColumns(client: ReturnType<typeof createClient>) {
+  const columns = await client.execute("pragma table_info(apify_runs)");
+
+  if (columns.rows.length === 0) {
+    return;
+  }
+
+  const existing = new Set(columns.rows.map((row) => String(row.name)));
+  const additions = [
+    ["source_id", "text"],
+    ["source_name", "text"],
+    ["source_category", "text"],
+    ["task_id", "text"],
+  ] as const;
+
+  for (const [name, definition] of additions) {
+    if (!existing.has(name)) {
+      await client.execute(`alter table apify_runs add column ${name} ${definition}`);
+    }
+  }
+}
+
 async function main() {
   loadEnvFile(".env");
   loadEnvFile(".env.local");
@@ -83,6 +105,7 @@ async function main() {
   const schema = readFileSync(schemaPath, "utf8");
   const client = createClient({ authToken, url });
 
+  await ensureApifyRunSourceColumns(client);
   await client.executeMultiple(schema);
   await ensureLeadQualificationColumns(client);
   client.close();

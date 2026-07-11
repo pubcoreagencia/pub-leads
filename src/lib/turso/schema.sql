@@ -80,7 +80,11 @@ create table if not exists search_logs (
 create table if not exists apify_runs (
   id text primary key,
   user_id text not null,
+  source_id text,
+  source_name text,
+  source_category text,
   actor_id text not null,
+  task_id text,
   run_id text not null unique,
   dataset_id text,
   source_type text not null,
@@ -93,6 +97,26 @@ create table if not exists apify_runs (
   started_at text not null default current_timestamp,
   finished_at text,
   metadata text not null default '{}'
+);
+
+create table if not exists apify_sources (
+  id text primary key,
+  user_id text,
+  kind text not null,
+  actor_id text,
+  task_id text,
+  name text not null,
+  description text,
+  category text not null,
+  lead_mapping text not null,
+  is_enabled integer not null default 1,
+  is_recommended integer not null default 0,
+  input_schema text,
+  default_input text,
+  metadata text not null default '{}',
+  synced_at text not null,
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
 );
 
 create table if not exists scraping_sessions (
@@ -202,6 +226,9 @@ create index if not exists lead_messages_user_lead_idx on lead_messages(user_id,
 create index if not exists search_logs_user_created_at_idx on search_logs(user_id, created_at);
 create index if not exists search_logs_user_source_idx on search_logs(user_id, source);
 create index if not exists apify_runs_user_started_idx on apify_runs(user_id, started_at);
+create index if not exists apify_runs_user_source_idx on apify_runs(user_id, source_id, source_category);
+create index if not exists apify_sources_user_category_idx on apify_sources(user_id, category);
+create index if not exists apify_sources_user_kind_idx on apify_sources(user_id, kind);
 create index if not exists scraping_sessions_user_updated_idx on scraping_sessions(user_id, updated_at);
 create index if not exists scraping_sessions_user_status_idx on scraping_sessions(user_id, status);
 create index if not exists scraping_session_results_session_idx on scraping_session_results(session_id);
@@ -246,4 +273,12 @@ for each row
 when new.updated_at = old.updated_at
 begin
   update scraping_session_results set updated_at = current_timestamp where id = old.id;
+end;
+
+create trigger if not exists apify_sources_set_updated_at
+after update on apify_sources
+for each row
+when new.updated_at = old.updated_at
+begin
+  update apify_sources set updated_at = current_timestamp where id = old.id;
 end;
