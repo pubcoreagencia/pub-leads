@@ -15,7 +15,7 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-full flex-col border-r border-slate-900 bg-slate-950 px-4 py-5 text-white">
+    <aside className="flex h-full w-full flex-col border-r border-red-950 bg-[linear-gradient(180deg,#170204_0%,#260407_44%,#09090b_100%)] px-4 py-5 text-white">
       <Link className="mb-7 block px-1" href="/app/dashboard" onClick={onNavigate}>
         <span className="flex h-20 items-center rounded-lg px-2">
           <Image

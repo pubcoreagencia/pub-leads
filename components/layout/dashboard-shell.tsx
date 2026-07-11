@@ -25,7 +25,7 @@ export function DashboardShell({
     <div className="min-h-screen bg-slate-100">
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-950/40 lg:hidden">
-          <div className="h-full w-72 max-w-[86vw] bg-slate-950">
+          <div className="h-full w-72 max-w-[86vw] bg-[linear-gradient(180deg,#170204_0%,#260407_44%,#09090b_100%)]">
             <DashboardSidebar onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
