@@ -149,6 +149,7 @@ export function LeadsPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
@@ -190,11 +191,15 @@ export function LeadsPageContent() {
 
   function handleApplyFilters() {
     setAppliedFilters(filters);
+    setSelectedLeadIds(new Set());
+    setFiltersOpen(false);
   }
 
   function handleClearFilters() {
     setFilters(initialFilters);
     setAppliedFilters(initialFilters);
+    setSelectedLeadIds(new Set());
+    setFiltersOpen(false);
   }
 
   function toggleLeadSelection(leadId: string, checked: boolean) {
@@ -331,10 +336,21 @@ export function LeadsPageContent() {
     <section className="space-y-6">
       <PageHeader
         actions={(
-          <Button onClick={openCreateModal} type="button">
-            <Plus className="h-4 w-4" />
-            Novo lead
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              className="w-full sm:hidden"
+              onClick={() => setFiltersOpen((current) => !current)}
+              type="button"
+              variant="outline"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              {filtersOpen ? "Fechar filtros" : "Filtros"}
+            </Button>
+            <Button className="w-full sm:w-auto" onClick={openCreateModal} type="button">
+              <Plus className="h-4 w-4" />
+              Novo lead
+            </Button>
+          </div>
         )}
         description="Revise canais, qualidade e estágio comercial antes de mandar leads para abordagem ou pipeline."
         eyebrow="Base CRM"
@@ -348,7 +364,7 @@ export function LeadsPageContent() {
         <MetricCard accent="amber" icon={PhoneCall} label="Telefone fixo" value={fixedPhones} />
       </div>
 
-      <Card className="border-slate-200 bg-white shadow-sm">
+      <Card className={`border-slate-200 bg-white shadow-sm ${filtersOpen ? "block" : "hidden md:block"}`}>
         <CardContent className="p-5">
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-slate-950">
@@ -494,7 +510,7 @@ export function LeadsPageContent() {
       <Card className="border-slate-200 bg-white shadow-sm">
         <CardContent className="p-0">
           {selectedCount > 0 ? (
-            <ActionBar className="rounded-none border-x-0 border-t-0 bg-red-50/60">
+            <ActionBar className="hidden rounded-none border-x-0 border-t-0 bg-red-50/60 md:flex">
               <span className="text-sm font-medium text-red-900">
                 {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
               </span>
@@ -804,6 +820,27 @@ export function LeadsPageContent() {
         onClose={() => setIsModalOpen(false)}
         open={isModalOpen}
       />
+
+      {selectedCount > 0 ? (
+        <div className="fixed inset-x-3 bottom-20 z-30 rounded-lg border border-red-100 bg-white p-3 shadow-[0_16px_40px_rgba(15,23,42,0.18)] md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-semibold text-slate-950">
+              {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
+            </span>
+            <Button
+              className="border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800"
+              disabled={isDeleting}
+              onClick={handleDeleteSelected}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Excluir
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

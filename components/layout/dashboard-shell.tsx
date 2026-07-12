@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DashboardHeader } from "@/components/layout/dashboard-header";
 import { DashboardSidebar } from "@/components/layout/dashboard-sidebar";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 
 type DashboardShellProps = Readonly<{
   children: ReactNode;
@@ -42,8 +43,9 @@ export function DashboardShell({
           userInitials={userInitials}
           userName={userName}
         />
-        <main className="mx-auto w-full max-w-[1500px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1500px] px-4 py-5 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-8">{children}</main>
       </div>
+      <MobileBottomNav />
     </div>
   );
 }

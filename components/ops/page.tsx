@@ -20,7 +20,7 @@ export function PageHeader({ actions, description, eyebrow, title }: PageHeaderP
         <h1 className="text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">{title}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
       </div>
-      {actions ? <div className="flex flex-wrap gap-2 sm:justify-end">{actions}</div> : null}
+      {actions ? <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:justify-end">{actions}</div> : null}
     </div>
   );
 }

@@ -222,10 +222,10 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 py-6">
-      <div className="max-h-[92vh] w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-premium">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-          <div>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-3 py-3 sm:items-center sm:px-4 sm:py-6">
+      <div className="max-h-[calc(100dvh-1.5rem)] w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white shadow-premium">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-4 sm:px-5">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-slate-950">
               {isEditing ? "Detalhes do lead" : "Novo lead"}
             </h2>
@@ -238,8 +238,8 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
           </Button>
         </div>
 
-        <div className="grid max-h-[calc(92vh-73px)] gap-0 overflow-y-auto lg:grid-cols-[1.25fr_0.75fr]">
-          <form className="space-y-5 p-5" onSubmit={handleSubmit(onSubmit)}>
+        <div className="grid max-h-[calc(100dvh-6rem)] gap-0 overflow-y-auto lg:grid-cols-[1.25fr_0.75fr]">
+          <form className="space-y-5 p-4 sm:p-5" onSubmit={handleSubmit(onSubmit)}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2 sm:col-span-2">
                 <Label htmlFor="name">Nome</Label>
@@ -337,7 +337,7 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
             <div className="flex flex-col-reverse gap-3 border-t border-slate-100 pt-5 sm:flex-row sm:justify-between">
               {lead ? (
                 <Button
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                  className="w-full text-red-600 hover:bg-red-50 hover:text-red-700 sm:w-auto"
                   disabled={isDeleting || isSaving}
                   onClick={handleDelete}
                   type="button"
@@ -349,14 +349,14 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
               ) : (
                 <span />
               )}
-              <Button disabled={isSaving || isDeleting} type="submit">
+              <Button className="w-full sm:w-auto" disabled={isSaving || isDeleting} type="submit">
                 {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Salvar lead
               </Button>
             </div>
           </form>
 
-          <aside className="border-t border-slate-200 bg-slate-50 p-5 lg:border-l lg:border-t-0">
+          <aside className="border-t border-slate-200 bg-slate-50 p-4 sm:p-5 lg:border-l lg:border-t-0">
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-slate-950">Notas internas</h3>
               <p className="mt-1 text-sm text-slate-500">
@@ -373,7 +373,7 @@ export function LeadDetailModal({ lead, open, onClose, onChanged }: LeadDetailMo
                     placeholder="Adicionar nota..."
                     value={noteContent}
                   />
-                  <Button disabled={isAddingNote || noteContent.trim().length === 0} onClick={handleAddNote} type="button">
+                  <Button className="w-full sm:w-auto" disabled={isAddingNote || noteContent.trim().length === 0} onClick={handleAddNote} type="button">
                     {isAddingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                     Adicionar nota
                   </Button>

@@ -41,7 +41,7 @@ export default function HomePage() {
             PubLeads · prospecção e abordagem B2B
           </div>
           <div className="space-y-4">
-            <h1 className="max-w-3xl text-4xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
+            <h1 className="max-w-3xl text-3xl font-semibold tracking-normal text-slate-950 sm:text-5xl">
               Encontre leads bons, qualifique contatos e aborde com ritmo comercial.
             </h1>
             <p className="max-w-2xl text-base leading-7 text-slate-600">
@@ -49,13 +49,13 @@ export default function HomePage() {
             </p>
           </div>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <Button asChild>
+            <Button asChild className="w-full sm:w-auto">
               <Link href="/register">
                 Criar conta
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild className="w-full sm:w-auto" variant="outline">
               <Link href="/login">Entrar</Link>
             </Button>
           </div>

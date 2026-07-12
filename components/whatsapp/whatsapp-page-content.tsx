@@ -60,6 +60,7 @@ function getLeadPhone(lead: Lead | null) {
 export function WhatsAppPageContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadId, setLeadId] = useState("");
+  const [mobileTab, setMobileTab] = useState<"queue" | "message" | "action">("queue");
   const [copyBase, setCopyBase] = useState("");
   const [city, setCity] = useState("");
   const [niche, setNiche] = useState("");
@@ -318,8 +319,28 @@ export function WhatsAppPageContent() {
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Salve leads na Prospecção para iniciar uma abordagem manual.</p>
         </div>
       ) : (
+        <>
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
+          {[
+            ["queue", "Fila"],
+            ["message", "Mensagem"],
+            ["action", "Ação"],
+          ].map(([id, label]) => (
+            <button
+              className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
+                mobileTab === id ? "bg-red-50 text-red-700" : "text-slate-500"
+              }`}
+              key={id}
+              onClick={() => setMobileTab(id as "queue" | "message" | "action")}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <div className="grid gap-5 xl:grid-cols-[0.8fr_1.25fr_0.85fr]">
-          <Card className="border-slate-200 bg-white shadow-sm">
+          <Card className={`${mobileTab === "queue" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
             <CardHeader>
               <CardTitle>Fila de leads</CardTitle>
               <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
@@ -344,7 +365,10 @@ export function WhatsAppPageContent() {
                   <button
                     className={`w-full rounded-md border p-3 text-left transition ${active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"}`}
                     key={lead.id}
-                    onClick={() => setLeadId(lead.id)}
+                    onClick={() => {
+                      setLeadId(lead.id);
+                      setMobileTab("message");
+                    }}
                     type="button"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -366,7 +390,7 @@ export function WhatsAppPageContent() {
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 bg-white shadow-sm">
+          <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
             <CardHeader>
               <CardTitle>Copy e mensagem</CardTitle>
               <p className="text-sm text-slate-500">A copy base permanece a fonte principal da variação.</p>
@@ -389,7 +413,7 @@ export function WhatsAppPageContent() {
                 <div className="grid gap-2"><Label htmlFor="niche">Nicho</Label><Input id="niche" onChange={(event) => setNiche(event.target.value)} value={niche} /></div>
               </div>
 
-              <Button disabled={isGenerating} onClick={handleDiversifyMessage} type="button">
+              <Button className="w-full sm:w-auto" disabled={isGenerating} onClick={handleDiversifyMessage} type="button">
                 {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 Diversificar mensagem
               </Button>
@@ -407,7 +431,7 @@ export function WhatsAppPageContent() {
             </CardContent>
           </Card>
 
-          <div className="space-y-5">
+          <div className={`${mobileTab === "action" ? "block" : "hidden"} space-y-5 xl:block`}>
             <Card className="border-slate-200 bg-white shadow-sm">
               <CardHeader><CardTitle>Ação manual</CardTitle></CardHeader>
               <CardContent className="space-y-3">
@@ -450,6 +474,20 @@ export function WhatsAppPageContent() {
             </div>
           </div>
         </div>
+        <div className="fixed inset-x-3 bottom-20 z-30 grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.18)] xl:hidden">
+          <Button disabled={!message} onClick={handleCopyMessage} size="sm" type="button" variant="outline">
+            <Clipboard className="h-4 w-4" />
+            Copiar
+          </Button>
+          <Button disabled={!message || !workspaceWaLink} onClick={handleOpenWhatsApp} size="sm" type="button">
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp
+          </Button>
+          <Button onClick={handleNextLead} size="sm" type="button" variant="outline">
+            Próximo
+          </Button>
+        </div>
+        </>
       )}
     </section>
   );

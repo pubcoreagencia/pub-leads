@@ -16,6 +16,7 @@ export function PipelinePageContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [mobileStatus, setMobileStatus] = useState<LeadStatus>("new");
 
   const loadLeads = useCallback(async () => {
     setIsLoading(true);
@@ -59,14 +60,7 @@ export function PipelinePageContent() {
   const contactedLeads = leads.filter((lead) => ["contacted", "responded", "proposal"].includes(lead.status)).length;
   const wonLeads = leads.filter((lead) => lead.status === "won").length;
 
-  async function handleDragEnd(event: DragEndEvent) {
-    const leadId = String(event.active.id);
-    const nextStatus = event.over?.data.current?.status as LeadStatus | undefined;
-
-    if (!nextStatus) {
-      return;
-    }
-
+  async function moveLeadToStatus(leadId: string, nextStatus: LeadStatus) {
     const lead = leads.find((item) => item.id === leadId);
 
     if (!lead || lead.status === nextStatus) {
@@ -94,6 +88,17 @@ export function PipelinePageContent() {
     } finally {
       setIsUpdating(false);
     }
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const leadId = String(event.active.id);
+    const nextStatus = event.over?.data.current?.status as LeadStatus | undefined;
+
+    if (!nextStatus) {
+      return;
+    }
+
+    await moveLeadToStatus(leadId, nextStatus);
   }
 
   return (
@@ -132,15 +137,71 @@ export function PipelinePageContent() {
           </p>
         </div>
       ) : (
-        <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-          <div className="overflow-x-auto pb-3">
-            <div className="grid min-w-[1260px] grid-cols-7 gap-4">
+        <>
+          <div className="md:hidden">
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-3">
               {pipelineColumns.map((column) => (
-                <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
+                <button
+                  className={`min-w-fit rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                    mobileStatus === column.id
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                  key={column.id}
+                  onClick={() => setMobileStatus(column.id)}
+                  type="button"
+                >
+                  {column.title} ({leadsByStatus[column.id].length})
+                </button>
               ))}
             </div>
+            <div className="grid gap-3">
+              {leadsByStatus[mobileStatus].length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-300 bg-white p-5 text-center text-sm leading-6 text-slate-500">
+                  Nenhum lead nesta etapa.
+                </div>
+              ) : (
+                leadsByStatus[mobileStatus].map((lead) => (
+                  <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={lead.id}>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-sm font-semibold text-slate-950">{lead.name}</h2>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
+                      </p>
+                    </div>
+                    <label className="mt-4 grid gap-2 text-xs font-medium text-slate-600">
+                      Mover para
+                      <select
+                        className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                        disabled={isUpdating}
+                        onChange={(event) => void moveLeadToStatus(lead.id, event.target.value as LeadStatus)}
+                        value={lead.status}
+                      >
+                        {pipelineColumns.map((column) => (
+                          <option key={column.id} value={column.id}>
+                            {column.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </article>
+                ))
+              )}
+            </div>
           </div>
-        </DndContext>
+
+          <div className="hidden md:block">
+            <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+              <div className="overflow-x-auto pb-3">
+                <div className="grid min-w-[1260px] grid-cols-7 gap-4">
+                  {pipelineColumns.map((column) => (
+                    <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
+                  ))}
+                </div>
+              </div>
+            </DndContext>
+          </div>
+        </>
       )}
     </section>
   );

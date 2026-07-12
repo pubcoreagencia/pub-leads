@@ -34,17 +34,17 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
     <section className="space-y-6">
       <PageHeader
         actions={(
-          <>
-            <Button asChild>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button asChild className="w-full sm:w-auto">
               <Link href="/app/scraper">
                 Nova prospecção
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild variant="outline">
+            <Button asChild className="w-full sm:w-auto" variant="outline">
               <Link href="/app/whatsapp">Abrir abordagem</Link>
             </Button>
-          </>
+          </div>
         )}
         description="Veja o que precisa de atenção agora: qualidade da base, canais disponíveis, pipeline e próximas ações."
         eyebrow="Cockpit operacional"
@@ -65,7 +65,7 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
           <p className="text-sm font-semibold text-slate-950">O que fazer agora</p>
           <p className="text-sm text-slate-500">Priorize leads com WhatsApp/Instagram, salve os bons e mova oportunidades no pipeline.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Button asChild size="sm" variant="outline"><Link href="/app/leads?qualification=with_instagram">Ver leads com Instagram</Link></Button>
           <Button asChild size="sm" variant="outline"><Link href="/app/pipeline">Ver pipeline</Link></Button>
           <Button asChild size="sm"><Link href="/app/scraper">Buscar leads</Link></Button>

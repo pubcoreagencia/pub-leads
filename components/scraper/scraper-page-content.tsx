@@ -1231,6 +1231,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
       <PageHeader
         actions={(
           <Button
+            className="w-full sm:w-auto"
             disabled={unsavedVisibleResults.length === 0 || isSavingAll}
             onClick={handleSaveVisible}
             type="button"
@@ -1248,7 +1249,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         title="Prospecção de leads"
       />
 
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0">
         {scraperSteps.map((step, index) => {
           const active =
             (index === 0 && !hasSearched) ||
@@ -1259,7 +1260,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
           return (
             <div
-              className={`rounded-lg border p-4 ${active ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"}`}
+              className={`min-w-[11rem] rounded-lg border p-4 md:min-w-0 ${active ? "border-red-300 bg-red-50" : "border-slate-200 bg-white"}`}
               key={step.label}
             >
               <div className="flex items-center gap-2">
@@ -1305,10 +1306,11 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button onClick={() => void refreshCurrentSession()} type="button" variant="outline">
+              <Button className="w-full sm:w-auto" onClick={() => void refreshCurrentSession()} type="button" variant="outline">
                 Continuar busca anterior
               </Button>
               <Button
+                className="w-full sm:w-auto"
                 disabled={isDiscardingSession}
                 onClick={handleDiscardSession}
                 type="button"
@@ -1376,6 +1378,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <Label htmlFor="apify-source">Fonte Apify disponivel</Label>
                   <Button
+                    className="w-full sm:w-auto"
                     disabled={isSyncingApifySources || isSearching}
                     onClick={() => void handleSyncApifySources()}
                     type="button"
@@ -1547,7 +1550,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             ) : null}
 
             <div className="flex items-end xl:col-span-2 xl:justify-end">
-              <Button disabled={isSearching} type="submit">
+              <Button className="w-full sm:w-auto" disabled={isSearching} type="submit">
                 {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                 {form.source === "google_places"
                   ? "Buscar no Google Places"
@@ -1591,6 +1594,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                 <span className="text-sm text-slate-500">{qualificationProgress}</span>
               ) : null}
               <Button
+                className="w-full sm:w-auto"
                 disabled={isQualifyingInstagram}
                 onClick={handleQualifyContacts}
                 type="button"
