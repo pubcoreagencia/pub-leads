@@ -23,7 +23,7 @@ import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
 import { fetchLeads } from "@/services/leads";
 import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
-import { createWaLink } from "@/src/lib/whatsapp/wa-link";
+import { createWhatsAppWebLink } from "@/src/lib/whatsapp/wa-link";
 import {
   copyWorkspaceMessage,
   openReusableWorkspaceWindow,
@@ -221,7 +221,7 @@ export function WhatsAppPageContent() {
     }
 
     try {
-      return createWaLink({ phone, message });
+      return createWhatsAppWebLink({ phone, message });
     } catch {
       return null;
     }
@@ -448,7 +448,7 @@ export function WhatsAppPageContent() {
   return (
     <section className="space-y-6">
       <PageHeader
-        actions={<StatusBadge tone="amber">Envio manual via wa.me</StatusBadge>}
+        actions={<StatusBadge tone="amber">Workspace WhatsApp Web</StatusBadge>}
         description="Siga um roteiro comercial por etapas, registre ações e avance a conversa sem automatizar envio."
         eyebrow="Funil de mensagens"
         title="Abordagem"
@@ -634,9 +634,12 @@ export function WhatsAppPageContent() {
                 <CardContent className="space-y-3">
                   <Button className="w-full" disabled={!message || !workspaceWaLink || isActing} onClick={handleOpenWhatsApp} type="button">
                     <MessageCircle className="h-4 w-4" />
-                    Abrir/atualizar WhatsApp
+                    Enviar para WhatsApp Web
                     <ExternalLink className="h-4 w-4" />
                   </Button>
+                  <p className="text-xs leading-5 text-slate-500">
+                    A primeira abertura cria o workspace do WhatsApp Web. As próximas mensagens reutilizam a mesma aba.
+                  </p>
                   <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_sent")} type="button" variant="outline">
                     <Send className="h-4 w-4" />
                     Marcar como enviado

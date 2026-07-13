@@ -1,4 +1,4 @@
-import { createWaLink } from "@/src/lib/whatsapp/wa-link";
+import { createWhatsAppWebLink } from "@/src/lib/whatsapp/wa-link";
 
 export type WhatsAppMessageDraft = {
   phone: string;
@@ -13,8 +13,8 @@ export type WhatsAppProvider = {
 
 export const manualWhatsAppProvider: WhatsAppProvider = {
   id: "manual-wa-link",
-  name: "WhatsApp manual via wa.me",
+  name: "WhatsApp manual via WhatsApp Web",
   createMessageLink(draft) {
-    return createWaLink(draft);
+    return createWhatsAppWebLink(draft);
   },
 };
