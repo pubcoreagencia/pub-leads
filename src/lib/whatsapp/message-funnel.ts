@@ -35,6 +35,36 @@ function cleanText(value: string) {
     .trim();
 }
 
+export function getTimeAwareGreeting(date = new Date()) {
+  const hour = Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      hour: "2-digit",
+      hour12: false,
+      timeZone: "America/Sao_Paulo",
+    }).format(date),
+  );
+
+  if (hour >= 5 && hour < 12) {
+    return "bom dia";
+  }
+
+  if (hour >= 12 && hour < 18) {
+    return "boa tarde";
+  }
+
+  return "boa noite";
+}
+
+export function applyTimeAwareGreeting(text: string, date = new Date()) {
+  const greeting = getTimeAwareGreeting(date);
+
+  return text.replace(/\bbom dia\b/gi, (match) =>
+    match[0] === match[0]?.toUpperCase()
+      ? `${greeting.charAt(0).toUpperCase()}${greeting.slice(1)}`
+      : greeting,
+  );
+}
+
 function leadCompany(lead: Lead) {
   return lead.company || lead.business_name || lead.fantasy_name || lead.name || "sua empresa";
 }
@@ -93,7 +123,7 @@ export function renderFunnelMessage({ context, lead, template, user }: RenderFun
 
   message = message.replace(/\{[a-zA-Z_]+\}/g, "");
 
-  return cleanText(message);
+  return cleanText(applyTimeAwareGreeting(message));
 }
 
 const pubStartUrl = "https://pub-start.pages.dev/";

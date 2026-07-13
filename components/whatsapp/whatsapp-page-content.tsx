@@ -13,6 +13,7 @@ import {
   Send,
   SkipForward,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -21,9 +22,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
-import { fetchLeads } from "@/services/leads";
+import { deleteLeads, fetchLeads } from "@/services/leads";
 import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
-import { createWhatsAppWebLink } from "@/src/lib/whatsapp/wa-link";
+import { applyTimeAwareGreeting } from "@/src/lib/whatsapp/message-funnel";
+import { createWhatsAppAppLink, createWhatsAppWebLink, isMobileWhatsappEnvironment } from "@/src/lib/whatsapp/wa-link";
 import {
   copyWorkspaceMessage,
   openReusableWorkspaceWindow,
@@ -143,7 +145,7 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
         ? metadata.instagram_url
         : "";
 
-  return template
+  const rendered = template
     .replace(/\{empresa\}|\{lead\}|\bEMPRESA\b|\bLEAD\b/g, company)
     .replace(/\{cidade\}|\bCIDADE\b/g, city)
     .replace(/\{nicho\}|\{copy\}|\bNICHO\b|\bCOPY\b/g, niche)
@@ -157,6 +159,8 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\s+([,.!?;:])/g, "$1")
     .trim();
+
+  return applyTimeAwareGreeting(rendered);
 }
 
 async function parseJson<T>(response: Response) {
@@ -182,6 +186,8 @@ export function WhatsAppPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingState, setIsLoadingState] = useState(false);
   const [isActing, setIsActing] = useState(false);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
+  const [usesMobileWhatsappApp, setUsesMobileWhatsappApp] = useState(false);
   const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
   const [variantSeed, setVariantSeed] = useState(1);
   const [mobileTab, setMobileTab] = useState<"queue" | "funnel" | "message" | "action">("queue");
@@ -221,11 +227,13 @@ export function WhatsAppPageContent() {
     }
 
     try {
-      return createWhatsAppWebLink({ phone, message });
+      return usesMobileWhatsappApp
+        ? createWhatsAppAppLink({ phone, message })
+        : createWhatsAppWebLink({ phone, message });
     } catch {
       return null;
     }
-  }, [message, selectedLead]);
+  }, [message, selectedLead, usesMobileWhatsappApp]);
 
   const loadFunnels = useCallback(async () => {
     const payload = await fetch("/api/message-funnels", { cache: "no-store" }).then((response) =>
@@ -298,6 +306,10 @@ export function WhatsAppPageContent() {
       active = false;
     };
   }, [loadFunnels, loadProfile]);
+
+  useEffect(() => {
+    setUsesMobileWhatsappApp(isMobileWhatsappEnvironment());
+  }, []);
 
   useEffect(() => {
     if (leadId) {
@@ -439,6 +451,37 @@ export function WhatsAppPageContent() {
     setMobileTab("funnel");
   }
 
+  async function handleDeleteLeadFromQueue(lead: Lead) {
+    const confirmed = window.confirm(`Excluir ${getLeadCompany(lead)} da base de leads? Essa ação não pode ser desfeita.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingLead(true);
+
+    try {
+      await deleteLeads([lead.id]);
+      setLeads((current) => current.filter((item) => item.id !== lead.id));
+
+      if (lead.id === leadId) {
+        setState(null);
+        setEvents([]);
+        setLeadId("");
+      }
+
+      toast({ title: "Lead excluído", description: "O lead saiu da fila de abordagem.", variant: "success" });
+    } catch (error) {
+      toast({
+        title: "Erro ao excluir lead",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsDeletingLead(false);
+    }
+  }
+
   function openAlternative(url: string, channel: "instagram" | "whatsapp") {
     if (!openReusableWorkspaceWindow(url, channel)) {
       toast({ title: "Pop-up bloqueado", description: "Permita abertura de janelas para continuar.", variant: "error" });
@@ -513,8 +556,8 @@ export function WhatsAppPageContent() {
                   const hasPhone = Boolean(getLeadPhone(lead));
 
                   return (
-                    <button
-                      className={`w-full rounded-md border p-3 text-left transition ${
+                    <article
+                      className={`cursor-pointer rounded-md border p-3 transition ${
                         active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"
                       }`}
                       key={lead.id}
@@ -522,7 +565,15 @@ export function WhatsAppPageContent() {
                         setLeadId(lead.id);
                         setMobileTab("funnel");
                       }}
-                      type="button"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setLeadId(lead.id);
+                          setMobileTab("funnel");
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -531,7 +582,21 @@ export function WhatsAppPageContent() {
                             {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
                           </p>
                         </div>
-                        <span className="text-xs text-slate-400">{index + 1}</span>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <span className="text-xs text-slate-400">{index + 1}</span>
+                          <button
+                            aria-label={`Excluir ${lead.name}`}
+                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-100 hover:text-red-700"
+                            disabled={isDeletingLead}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleDeleteLeadFromQueue(lead);
+                            }}
+                            type="button"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
@@ -541,7 +606,7 @@ export function WhatsAppPageContent() {
                           {active && state ? funnelStatusLabels[state.status] : "Funil"}
                         </span>
                       </div>
-                    </button>
+                    </article>
                   );
                 })}
               </CardContent>
@@ -634,11 +699,15 @@ export function WhatsAppPageContent() {
                 <CardContent className="space-y-3">
                   <Button className="w-full" disabled={!message || !workspaceWaLink || isActing} onClick={handleOpenWhatsApp} type="button">
                     <MessageCircle className="h-4 w-4" />
-                    Enviar para WhatsApp Web
+                    {usesMobileWhatsappApp ? "Abrir no app WhatsApp" : "Enviar para WhatsApp Web"}
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                   <p className="text-xs leading-5 text-slate-500">
-                    A primeira abertura cria o workspace do WhatsApp Web. As próximas mensagens reutilizam a mesma aba.
+                    {usesMobileWhatsappApp ? (
+                      "No celular, a mensagem abre direto no app do WhatsApp para envio manual."
+                    ) : (
+                      "A primeira abertura cria o workspace do WhatsApp Web. As próximas mensagens reutilizam a mesma aba."
+                    )}
                   </p>
                   <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_sent")} type="button" variant="outline">
                     <Send className="h-4 w-4" />

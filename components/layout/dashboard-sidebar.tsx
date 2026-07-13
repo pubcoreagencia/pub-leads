@@ -15,8 +15,8 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-full flex-col border-r border-red-950 bg-[linear-gradient(180deg,#170204_0%,#260407_44%,#09090b_100%)] px-4 py-5 text-white">
-      <Link className="mb-7 block px-1" href="/app/dashboard" onClick={onNavigate}>
+    <aside className="flex h-full min-h-0 w-full flex-col border-r border-red-950 bg-[linear-gradient(180deg,#170204_0%,#260407_44%,#09090b_100%)] px-4 py-5 text-white">
+      <Link className="mb-6 block px-1 pr-10 lg:pr-1" href="/app/dashboard" onClick={onNavigate}>
         <span className="flex h-20 items-center rounded-lg px-2">
           <Image
             alt="PubLeads"
@@ -28,7 +28,7 @@ export function DashboardSidebar({ onNavigate }: DashboardSidebarProps) {
         </span>
       </Link>
 
-      <nav className="grid gap-1">
+      <nav className="grid flex-1 content-start gap-1 overflow-y-auto pr-1">
         {dashboardNavItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 

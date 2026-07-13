@@ -24,14 +24,14 @@ export function MobileBottomNav() {
             <Link
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-h-12 flex-col items-center justify-center gap-1 rounded-md px-1 text-[0.68rem] font-semibold text-slate-500 transition",
+                "flex min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-[0.62rem] font-semibold text-slate-500 transition",
                 active ? "bg-red-50 text-red-700" : "hover:bg-slate-100 hover:text-slate-900",
               )}
               href={item.href}
               key={item.href}
             >
-              <Icon className="h-4 w-4" />
-              <span className="max-w-full truncate">{item.title}</span>
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="max-w-full truncate leading-none">{item.title}</span>
             </Link>
           );
         })}

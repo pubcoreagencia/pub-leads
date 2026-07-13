@@ -35,3 +35,26 @@ export function createWhatsAppWebLink({ phone, message }: WaLinkParams) {
 
   return `https://web.whatsapp.com/send?${params.toString()}`;
 }
+
+export function createWhatsAppAppLink({ phone, message }: WaLinkParams) {
+  const normalizedPhone = normalizeWhatsAppPhone(phone);
+
+  if (!normalizedPhone) {
+    throw new Error("Lead sem WhatsApp mÃ³vel vÃ¡lido.");
+  }
+
+  const params = new URLSearchParams({
+    phone: normalizedPhone,
+    text: message,
+  });
+
+  return `whatsapp://send?${params.toString()}`;
+}
+
+export function isMobileWhatsappEnvironment() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}

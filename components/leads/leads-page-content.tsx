@@ -8,7 +8,6 @@ import {
   Loader2,
   Mail,
   MessageCircle,
-  PhoneCall,
   Plus,
   Search,
   SlidersHorizontal,
@@ -123,7 +122,7 @@ function whatsappBadge(qualification: LeadQualification) {
   }
 
   if (qualification.whatsapp_status === "landline") {
-    return { className: "bg-amber-50 text-amber-800", label: "Telefone fixo" };
+    return { className: "bg-slate-100 text-slate-700", label: "Telefone" };
   }
 
   if (qualification.whatsapp_status === "invalid") {
@@ -322,7 +321,7 @@ export function LeadsPageContent() {
     ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status),
   ).length;
   const leadsWithInstagram = leads.filter((lead) => getLeadQualification(lead).instagram_status === "found").length;
-  const fixedPhones = leads.filter((lead) => getLeadQualification(lead).whatsapp_status === "landline").length;
+  const leadsWithWebsite = leads.filter((lead) => Boolean(lead.website)).length;
 
   return (
     <section className="space-y-6">
@@ -353,7 +352,7 @@ export function LeadsPageContent() {
         <MetricCard accent="red" icon={Users} label="Leads visíveis" value={leads.length} />
         <MetricCard accent="emerald" icon={MessageCircle} label="Com WhatsApp" value={leadsWithWhatsapp} />
         <MetricCard accent="pink" icon={Instagram} label="Com Instagram" value={leadsWithInstagram} />
-        <MetricCard accent="amber" icon={PhoneCall} label="Telefone fixo" value={fixedPhones} />
+        <MetricCard accent="blue" icon={Globe2} label="Com site" value={leadsWithWebsite} />
       </div>
 
       <Card className={`border-slate-200 bg-white shadow-sm ${filtersOpen ? "block" : "hidden md:block"}`}>
@@ -724,9 +723,8 @@ export function LeadsPageContent() {
                             {lead.company || lead.email || lead.phone || "Sem contato"}
                           </span>
                           {hasContactPhone(lead) ? (
-                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                              <PhoneCall className="h-3 w-3" />
-                              com telefone
+                            <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              Contato disponível
                             </span>
                           ) : null}
                           <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${whatsapp.className}`}>

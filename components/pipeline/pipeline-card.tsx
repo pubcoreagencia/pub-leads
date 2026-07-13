@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
@@ -9,17 +10,24 @@ import { leadSourceLabels } from "@/config/pipeline";
 import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/schemas/lead";
+import { isMobileWhatsappEnvironment } from "@/src/lib/whatsapp/wa-link";
 
 type PipelineCardProps = {
   lead: Lead;
 };
 
 export function PipelineCard({ lead }: PipelineCardProps) {
+  const [usesMobileWhatsappApp, setUsesMobileWhatsappApp] = useState(false);
   const qualification = getLeadQualification(lead);
-  const whatsappUrl =
-    qualification.whatsapp_status === "confirmed" || qualification.whatsapp_status === "possible"
-      ? `https://wa.me/${qualification.normalized_whatsapp}`
-      : null;
+  const whatsappUrl = useMemo(() => {
+    if (qualification.whatsapp_status !== "confirmed" && qualification.whatsapp_status !== "possible") {
+      return null;
+    }
+
+    return usesMobileWhatsappApp
+      ? `whatsapp://send?phone=${qualification.normalized_whatsapp}`
+      : `https://web.whatsapp.com/send?phone=${qualification.normalized_whatsapp}`;
+  }, [qualification.normalized_whatsapp, qualification.whatsapp_status, usesMobileWhatsappApp]);
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
     data: {
@@ -32,10 +40,14 @@ export function PipelineCard({ lead }: PipelineCardProps) {
     transform: CSS.Translate.toString(transform),
   };
 
+  useEffect(() => {
+    setUsesMobileWhatsappApp(isMobileWhatsappEnvironment());
+  }, []);
+
   return (
     <article
       className={cn(
-        "rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:border-red-200",
+        "group rounded-md border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md",
         isDragging && "z-20 scale-[0.98] opacity-60 shadow-lg ring-2 ring-red-200",
       )}
       ref={setNodeRef}
@@ -43,7 +55,7 @@ export function PipelineCard({ lead }: PipelineCardProps) {
     >
       <div className="flex items-start gap-3">
         <button
-          className="mt-0.5 rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+          className="mt-0.5 rounded-md p-1 text-slate-300 transition hover:bg-slate-100 hover:text-slate-600 group-hover:text-slate-500"
           type="button"
           {...listeners}
           {...attributes}
@@ -51,7 +63,7 @@ export function PipelineCard({ lead }: PipelineCardProps) {
           <GripVertical className="h-4 w-4" />
         </button>
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-slate-950">{lead.name}</h3>
+          <h3 className="line-clamp-2 text-sm font-semibold leading-5 text-slate-950">{lead.name}</h3>
           <p className="mt-1 truncate text-xs text-slate-500">
             {lead.company || lead.category || "Sem empresa"}
           </p>
@@ -90,7 +102,7 @@ export function PipelineCard({ lead }: PipelineCardProps) {
               : qualification.whatsapp_status === "possible"
                 ? "Possivel WhatsApp"
                 : qualification.whatsapp_status === "landline"
-                  ? "Telefone fixo"
+                  ? "Telefone"
                 : "Sem WhatsApp"}
           </span>
           <span
@@ -110,9 +122,6 @@ export function PipelineCard({ lead }: PipelineCardProps) {
               Site
             </span>
           ) : null}
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">
-            Funil de abordagem
-          </span>
         </div>
         {whatsappUrl || qualification.instagram_url ? (
           <div className="flex flex-wrap gap-2 pt-1">

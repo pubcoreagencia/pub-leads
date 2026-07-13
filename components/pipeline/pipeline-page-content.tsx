@@ -59,6 +59,7 @@ export function PipelinePageContent() {
   const activeLeads = leads.filter((lead) => !["won", "lost"].includes(lead.status)).length;
   const contactedLeads = leads.filter((lead) => ["contacted", "responded", "proposal"].includes(lead.status)).length;
   const wonLeads = leads.filter((lead) => lead.status === "won").length;
+  const conversionRate = leads.length > 0 ? Math.round((wonLeads / leads.length) * 100) : 0;
 
   async function moveLeadToStatus(leadId: string, nextStatus: LeadStatus) {
     const lead = leads.find((item) => item.id === leadId);
@@ -118,7 +119,7 @@ export function PipelinePageContent() {
       <div className="grid gap-4 sm:grid-cols-3">
         <MetricCard accent="red" icon={Users} label="Leads no pipeline" value={leads.length} />
         <MetricCard accent="blue" icon={TrendingUp} label="Ativos" value={activeLeads} />
-        <MetricCard accent="emerald" helper={`${wonLeads} ganhos`} icon={Target} label="Em contato" value={contactedLeads} />
+        <MetricCard accent="emerald" helper={`${wonLeads} ganhos · ${conversionRate}%`} icon={Target} label="Em contato" value={contactedLeads} />
       </div>
 
       {isLoading ? (
@@ -138,6 +139,37 @@ export function PipelinePageContent() {
         </div>
       ) : (
         <>
+          <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+              {pipelineColumns.map((column) => {
+                const count = leadsByStatus[column.id].length;
+                const active = mobileStatus === column.id;
+
+                return (
+                  <button
+                    className={`rounded-md border p-3 text-left transition ${
+                      active ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-white hover:border-red-200 hover:bg-slate-50"
+                    }`}
+                    key={column.id}
+                    onClick={() => setMobileStatus(column.id)}
+                    type="button"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold uppercase">{column.title}</span>
+                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">{count}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-red-600"
+                        style={{ width: leads.length > 0 ? `${Math.max(8, Math.round((count / leads.length) * 100))}%` : "0%" }}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="md:hidden">
             <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-3">
               {pipelineColumns.map((column) => (
@@ -162,9 +194,9 @@ export function PipelinePageContent() {
                 </div>
               ) : (
                 leadsByStatus[mobileStatus].map((lead) => (
-                  <article className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={lead.id}>
+                  <article className="rounded-md border border-slate-200 bg-white p-4 shadow-sm" key={lead.id}>
                     <div className="min-w-0">
-                      <h2 className="truncate text-sm font-semibold text-slate-950">{lead.name}</h2>
+                      <h2 className="line-clamp-2 text-sm font-semibold text-slate-950">{lead.name}</h2>
                       <p className="mt-1 text-xs leading-5 text-slate-500">
                         {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
                       </p>
@@ -193,7 +225,7 @@ export function PipelinePageContent() {
           <div className="hidden md:block">
             <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
               <div className="overflow-x-auto pb-3">
-                <div className="grid min-w-[1260px] grid-cols-7 gap-4">
+                <div className="grid min-w-[1180px] grid-cols-7 gap-3">
                   {pipelineColumns.map((column) => (
                     <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
                   ))}
