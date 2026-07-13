@@ -103,7 +103,7 @@ export function PipelinePageContent() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-5">
       <PageHeader
         actions={(
           <Button disabled={isLoading || isUpdating} onClick={loadLeads} type="button" variant="outline">
@@ -139,15 +139,15 @@ export function PipelinePageContent() {
         </div>
       ) : (
         <>
-          <div className="rounded-md border border-slate-200 bg-white p-3 shadow-sm">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+          <div className="rounded-md border border-slate-200 bg-white p-2.5 shadow-sm">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               {pipelineColumns.map((column) => {
                 const count = leadsByStatus[column.id].length;
                 const active = mobileStatus === column.id;
 
                 return (
                   <button
-                    className={`rounded-md border p-3 text-left transition ${
+                    className={`min-w-40 rounded-md border p-3 text-left transition ${
                       active ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-white hover:border-red-200 hover:bg-slate-50"
                     }`}
                     key={column.id}
@@ -158,7 +158,7 @@ export function PipelinePageContent() {
                       <span className="text-xs font-semibold uppercase">{column.title}</span>
                       <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-700">{count}</span>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-100">
                       <div
                         className="h-full rounded-full bg-red-600"
                         style={{ width: leads.length > 0 ? `${Math.max(8, Math.round((count / leads.length) * 100))}%` : "0%" }}
@@ -225,7 +225,7 @@ export function PipelinePageContent() {
           <div className="hidden md:block">
             <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
               <div className="overflow-x-auto pb-3">
-                <div className="grid min-w-[1180px] grid-cols-7 gap-3">
+                <div className="grid min-w-[1760px] grid-cols-[repeat(7,minmax(240px,1fr))] gap-3">
                   {pipelineColumns.map((column) => (
                     <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
                   ))}
