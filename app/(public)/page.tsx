@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Database, Instagram, KanbanSquare, MessageCircle, Search, ShieldCheck } from "lucide-react";
+import { ArrowRight, KanbanSquare, MessageCircle, Search, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -26,11 +26,6 @@ const workflow = [
   },
 ];
 
-const sources = [
-  { icon: Database, label: "CNPJ no Turso" },
-  { icon: Instagram, label: "Instagram quando disponível" },
-  { icon: Search, label: "Apify para contas avançadas" },
-];
 
 export default function HomePage() {
   return (
@@ -99,22 +94,6 @@ export default function HomePage() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-950">Fontes e dados preparados para operação real</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">Supabase cuida de auth/billing; Turso guarda dados operacionais e volumosos.</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {sources.map((source) => (
-              <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700" key={source.label}>
-                <source.icon className="h-4 w-4 text-red-700" />
-                {source.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
     </section>
   );
 }
