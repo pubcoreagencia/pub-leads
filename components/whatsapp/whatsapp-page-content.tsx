@@ -125,7 +125,7 @@ function getLeadCompany(lead: Lead | null) {
 }
 
 function isPendingApproachLead(lead: Lead) {
-  return lead.status !== "contacted";
+  return !["responded", "proposal", "won", "lost"].includes(lead.status);
 }
 
 function renderLocalTemplate(template: string, lead: Lead | null, operatorName: string) {
@@ -512,7 +512,7 @@ export function WhatsAppPageContent() {
           <MessageCircle className="mb-4 h-7 w-7 text-red-600" />
           <h2 className="text-lg font-semibold text-slate-950">Nenhum lead pendente de abordagem</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-            Salve novos leads na Prospecção ou revise a aba Leads. Leads marcados como Contatado não aparecem nesta fila.
+            Salve novos leads na Prospecção ou revise a aba Leads. O lead só sai da abordagem quando avançar para uma etapa acima de Contatado.
           </p>
         </div>
       ) : (
