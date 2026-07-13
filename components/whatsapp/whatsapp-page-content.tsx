@@ -122,6 +122,10 @@ function getLeadCompany(lead: Lead | null) {
   return lead?.company || lead?.business_name || lead?.fantasy_name || lead?.name || "Lead";
 }
 
+function isPendingApproachLead(lead: Lead) {
+  return lead.status !== "contacted";
+}
+
 function renderLocalTemplate(template: string, lead: Lead | null, operatorName: string) {
   if (!lead) {
     return "";
@@ -193,18 +197,19 @@ export function WhatsAppPageContent() {
   const activeStep = useMemo(() => {
     return selectedFunnel?.steps.find((step) => step.id === activeStepId) ?? selectedFunnel?.steps[0] ?? null;
   }, [activeStepId, selectedFunnel]);
+  const pendingApproachLeads = useMemo(() => leads.filter(isPendingApproachLead), [leads]);
   const approachLeads = useMemo(
     () =>
       onlyEligibleLeads
-        ? leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
-        : leads,
-    [leads, onlyEligibleLeads],
+        ? pendingApproachLeads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
+        : pendingApproachLeads,
+    [onlyEligibleLeads, pendingApproachLeads],
   );
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;
   const websiteUrl = getWebsiteUrl(selectedLead?.website ?? null);
-  const whatsappReadyCount = leads.filter((lead) =>
+  const whatsappReadyCount = pendingApproachLeads.filter((lead) =>
     ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status),
   ).length;
   const repliedCount = events.some((event) => event.event_type === "marked_replied") ? 1 : 0;
@@ -273,7 +278,8 @@ export function WhatsAppPageContent() {
         }
 
         setLeads(items);
-        setLeadId(items.find((lead) => getLeadPhone(lead))?.id ?? items[0]?.id ?? "");
+        const pendingItems = items.filter(isPendingApproachLead);
+        setLeadId(pendingItems.find((lead) => getLeadPhone(lead))?.id ?? pendingItems[0]?.id ?? "");
       })
       .catch((error) => {
         toast({
@@ -302,6 +308,8 @@ export function WhatsAppPageContent() {
   useEffect(() => {
     if (approachLeads.length > 0 && !approachLeads.some((lead) => lead.id === leadId)) {
       setLeadId(approachLeads[0].id);
+    } else if (approachLeads.length === 0 && leadId) {
+      setLeadId("");
     }
   }, [approachLeads, leadId]);
 
@@ -447,7 +455,7 @@ export function WhatsAppPageContent() {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <MetricCard accent="red" icon={Users} label="Leads carregados" value={leads.length} />
+        <MetricCard accent="red" icon={Users} label="Leads na fila" value={pendingApproachLeads.length} />
         <MetricCard accent="emerald" icon={MessageCircle} label="WhatsApp possível" value={whatsappReadyCount} />
         <MetricCard accent="blue" icon={CheckCircle2} label="Respostas no lead" value={repliedCount} />
       </div>
@@ -457,12 +465,12 @@ export function WhatsAppPageContent() {
           <Loader2 className="h-4 w-4 animate-spin text-red-600" />
           Carregando funil de abordagem...
         </div>
-      ) : leads.length === 0 || !selectedFunnel ? (
+      ) : pendingApproachLeads.length === 0 || !selectedFunnel ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
           <MessageCircle className="mb-4 h-7 w-7 text-red-600" />
-          <h2 className="text-lg font-semibold text-slate-950">Nenhum lead disponível</h2>
+          <h2 className="text-lg font-semibold text-slate-950">Nenhum lead pendente de abordagem</h2>
           <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-            Salve leads na Prospecção para iniciar um funil de abordagem manual.
+            Salve novos leads na Prospecção ou revise a aba Leads. Leads marcados como Contatado não aparecem nesta fila.
           </p>
         </div>
       ) : (
