@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Globe2, GripVertical, Instagram, MapPin, MessageCircle } from "lucide-react";
@@ -109,6 +110,9 @@ export function PipelineCard({ lead }: PipelineCardProps) {
               Site
             </span>
           ) : null}
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 font-medium text-red-700">
+            Funil de abordagem
+          </span>
         </div>
         {whatsappUrl || qualification.instagram_url ? (
           <div className="flex flex-wrap gap-2 pt-1">
@@ -132,6 +136,12 @@ export function PipelineCard({ lead }: PipelineCardProps) {
                 <Instagram className="h-3 w-3" /> Instagram
               </a>
             ) : null}
+            <Link
+              className="inline-flex items-center gap-1 text-xs font-medium text-red-700 hover:text-red-800"
+              href="/app/whatsapp"
+            >
+              <MessageCircle className="h-3 w-3" /> Abrir funil
+            </Link>
           </div>
         ) : null}
       </div>

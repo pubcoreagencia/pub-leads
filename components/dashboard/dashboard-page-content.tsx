@@ -68,6 +68,7 @@ export function DashboardPageContent({ summary }: DashboardPageContentProps) {
         <div className="grid w-full gap-2 sm:flex sm:w-auto sm:flex-wrap">
           <Button asChild size="sm" variant="outline"><Link href="/app/leads?qualification=with_instagram">Ver leads com Instagram</Link></Button>
           <Button asChild size="sm" variant="outline"><Link href="/app/pipeline">Ver pipeline</Link></Button>
+          <Button asChild size="sm" variant="outline"><Link href="/app/whatsapp">Abrir funil de mensagens</Link></Button>
           <Button asChild size="sm"><Link href="/app/scraper">Buscar leads</Link></Button>
         </div>
       </ActionBar>

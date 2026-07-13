@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronRight,
@@ -10,40 +10,93 @@ import {
   Instagram,
   Loader2,
   MessageCircle,
+  Send,
   SkipForward,
   Sparkles,
   Users,
 } from "lucide-react";
 
+import { MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
 import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
 import { fetchLeads } from "@/services/leads";
 import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
+import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 import {
   copyWorkspaceMessage,
   openReusableWorkspaceWindow,
 } from "@/src/lib/whatsapp/workspace";
-import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 
-type GeneratedMessageResponse = {
-  message: string;
-  savedMessage: { id: string };
-  stats?: {
-    finalLength: number;
-    originalLength: number;
-    reductionPercent: number;
-    transformationsApplied: number;
-    warnings: string[];
-  };
-  waLink: string | null;
+type MessageFunnelStep = {
+  id: string;
+  name: string;
+  objective: string | null;
+  step_order: number;
+  template: string;
+  wait_hint: string | null;
 };
 
-type WorkspaceAction = "contacted" | "copied" | "opened";
+type MessageFunnel = {
+  id: string;
+  name: string;
+  description: string | null;
+  steps: MessageFunnelStep[];
+};
+
+type LeadFunnelState = {
+  current_step_id: string | null;
+  current_step_order: number;
+  funnel_id: string;
+  last_message_at: string | null;
+  last_reply_at: string | null;
+  status: "not_started" | "contacted" | "replied" | "explaining" | "follow_up" | "converted" | "lost" | "paused";
+};
+
+type LeadMessageEvent = {
+  created_at: string;
+  event_type: string;
+  id: string;
+  message_content: string | null;
+  step_order: number | null;
+};
+
+type FunnelPayload = { funnels: MessageFunnel[] };
+type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
+type DiversifyPayload = { message: string; error?: string };
+
+const funnelStatusLabels: Record<LeadFunnelState["status"], string> = {
+  contacted: "Contato feito",
+  converted: "Convertido",
+  explaining: "Explicando",
+  follow_up: "Follow-up",
+  lost: "Perdido",
+  not_started: "Não iniciado",
+  paused: "Pausado",
+  replied: "Respondeu",
+};
+
+const eventLabels: Record<string, string> = {
+  advanced_step: "Avançou etapa",
+  copied: "Copiou mensagem",
+  marked_replied: "Marcou resposta",
+  marked_sent: "Marcou envio",
+  note: "Nota",
+  opened_whatsapp: "Abriu WhatsApp",
+  skipped: "Pulou lead",
+};
+
+function formatDate(value: string | null) {
+  if (!value) {
+    return "Sem registro";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
 
 function getWebsiteUrl(website: string | null) {
   if (!website) {
@@ -64,36 +117,95 @@ function getLeadPhone(lead: Lead | null) {
     : null;
 }
 
+function getLeadCompany(lead: Lead | null) {
+  return lead?.company || lead?.business_name || lead?.fantasy_name || lead?.name || "Lead";
+}
+
+function renderLocalTemplate(template: string, lead: Lead | null) {
+  if (!lead) {
+    return "";
+  }
+
+  const company = getLeadCompany(lead);
+  const city = lead.city || "sua cidade";
+  const niche = lead.category || "seu nicho";
+  const project = city ? `Projeto ${city}` : "Projeto PUB Start";
+  const metadata = lead.metadata ?? {};
+  const instagram =
+    typeof metadata.instagram_handle === "string"
+      ? `@${metadata.instagram_handle.replace(/^@/, "")}`
+      : typeof metadata.instagram_url === "string"
+        ? metadata.instagram_url
+        : "";
+
+  return template
+    .replace(/\{empresa\}|\{lead\}|\bEMPRESA\b|\bLEAD\b/g, company)
+    .replace(/\{cidade\}|\bCIDADE\b/g, city)
+    .replace(/\{nicho\}|\{copy\}|\bNICHO\b|\bCOPY\b/g, niche)
+    .replace(/\{operador\}/g, "representante da Agência PUB")
+    .replace(/\{telefone\}/g, lead.whatsapp || lead.phone || lead.phone_2 || "")
+    .replace(/\{site\}/g, lead.website || "")
+    .replace(/\{instagram\}/g, instagram)
+    .replace(/\{plano\}/g, "")
+    .replace(/\{projeto\}/g, project)
+    .replace(/\{[a-zA-Z_]+\}/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.!?;:])/g, "$1")
+    .trim();
+}
+
+async function parseJson<T>(response: Response) {
+  const payload = (await response.json()) as T & { error?: string };
+
+  if (!response.ok) {
+    throw new Error(payload.error ?? "Não foi possível concluir a ação.");
+  }
+
+  return payload;
+}
+
 export function WhatsAppPageContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadId, setLeadId] = useState("");
-  const [mobileTab, setMobileTab] = useState<"queue" | "message" | "action">("queue");
-  const [copyBase, setCopyBase] = useState("");
-  const [city, setCity] = useState("");
-  const [niche, setNiche] = useState("");
+  const [funnels, setFunnels] = useState<MessageFunnel[]>([]);
+  const [funnelId, setFunnelId] = useState("");
+  const [state, setState] = useState<LeadFunnelState | null>(null);
+  const [events, setEvents] = useState<LeadMessageEvent[]>([]);
+  const [activeStepId, setActiveStepId] = useState("");
   const [message, setMessage] = useState("");
-  const [messageId, setMessageId] = useState<string | null>(null);
-  const [messageStats, setMessageStats] = useState<GeneratedMessageResponse["stats"] | null>(null);
-  const [isLoadingLeads, setIsLoadingLeads] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [isMarkingContacted, setIsMarkingContacted] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingState, setIsLoadingState] = useState(false);
+  const [isActing, setIsActing] = useState(false);
   const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
   const [variantSeed, setVariantSeed] = useState(1);
+  const [mobileTab, setMobileTab] = useState<"queue" | "funnel" | "message" | "action">("queue");
 
   const selectedLead = useMemo(
     () => leads.find((lead) => lead.id === leadId) ?? null,
     [leadId, leads],
   );
+  const selectedFunnel = useMemo(
+    () => funnels.find((funnel) => funnel.id === funnelId) ?? funnels[0] ?? null,
+    [funnelId, funnels],
+  );
+  const activeStep = useMemo(() => {
+    return selectedFunnel?.steps.find((step) => step.id === activeStepId) ?? selectedFunnel?.steps[0] ?? null;
+  }, [activeStepId, selectedFunnel]);
   const approachLeads = useMemo(
-    () => onlyEligibleLeads
-      ? leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
-      : leads,
+    () =>
+      onlyEligibleLeads
+        ? leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
+        : leads,
     [leads, onlyEligibleLeads],
   );
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;
   const websiteUrl = getWebsiteUrl(selectedLead?.website ?? null);
+  const whatsappReadyCount = leads.filter((lead) =>
+    ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status),
+  ).length;
+  const repliedCount = events.some((event) => event.event_type === "marked_replied") ? 1 : 0;
   const workspaceWaLink = useMemo(() => {
     const phone = getLeadPhone(selectedLead);
 
@@ -107,17 +219,46 @@ export function WhatsAppPageContent() {
       return null;
     }
   }, [message, selectedLead]);
-  const whatsappReadyCount = leads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status)).length;
-  const instagramOnlyCount = leads.filter((lead) => {
-    const item = getLeadQualification(lead);
-    return item.instagram_status === "found" && !["confirmed", "possible"].includes(item.whatsapp_status);
-  }).length;
+
+  const loadFunnels = useCallback(async () => {
+    const payload = await fetch("/api/message-funnels", { cache: "no-store" }).then((response) =>
+      parseJson<FunnelPayload>(response),
+    );
+    setFunnels(payload.funnels);
+    setFunnelId((current) => current || payload.funnels[0]?.id || "");
+  }, []);
+
+  const loadState = useCallback(async (nextLeadId: string) => {
+    if (!nextLeadId) {
+      return;
+    }
+
+    setIsLoadingState(true);
+
+    try {
+      const payload = await fetch(`/api/leads/${nextLeadId}/funnel-state`, { cache: "no-store" }).then((response) =>
+        parseJson<StatePayload>(response),
+      );
+      setState(payload.state);
+      setEvents(payload.events);
+      setFunnelId(payload.state.funnel_id);
+      setActiveStepId(payload.state.current_step_id ?? "");
+    } catch (error) {
+      toast({
+        title: "Erro ao carregar funil",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsLoadingState(false);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
 
-    fetchLeads()
-      .then((items) => {
+    Promise.all([fetchLeads(), loadFunnels()])
+      .then(([items]) => {
         if (!active) {
           return;
         }
@@ -127,34 +268,27 @@ export function WhatsAppPageContent() {
       })
       .catch((error) => {
         toast({
-          title: "Erro ao carregar leads",
+          title: "Erro ao carregar abordagem",
           description: error instanceof Error ? error.message : "Tente novamente.",
           variant: "error",
         });
       })
       .finally(() => {
         if (active) {
-          setIsLoadingLeads(false);
+          setIsLoading(false);
         }
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadFunnels]);
 
   useEffect(() => {
-    if (!selectedLead) {
-      return;
+    if (leadId) {
+      void loadState(leadId);
     }
-
-    setCity(selectedLead.city ?? "");
-    setNiche(selectedLead.category ?? "");
-    setMessage("");
-    setMessageId(null);
-    setMessageStats(null);
-    setVariantSeed(1);
-  }, [selectedLead]);
+  }, [leadId, loadState]);
 
   useEffect(() => {
     if (approachLeads.length > 0 && !approachLeads.some((lead) => lead.id === leadId)) {
@@ -162,68 +296,43 @@ export function WhatsAppPageContent() {
     }
   }, [approachLeads, leadId]);
 
-  async function recordWorkspaceAction(action: WorkspaceAction) {
-    if (!selectedLead) {
+  useEffect(() => {
+    if (!activeStep || !selectedLead) {
+      setMessage("");
       return;
     }
+
+    setMessage(renderLocalTemplate(activeStep.template, selectedLead));
+  }, [activeStep, selectedLead]);
+
+  async function recordEvent(eventType: string, options: { advanceTo?: MessageFunnelStep | null; messageContent?: string | null } = {}) {
+    if (!selectedLead || !activeStep || !selectedFunnel) {
+      return;
+    }
+
+    setIsActing(true);
 
     try {
-      await fetch("/api/whatsapp/workspace-event", {
-        body: JSON.stringify({ action, leadId: selectedLead.id, messageId: messageId ?? undefined }),
+      await fetch(`/api/leads/${selectedLead.id}/message-events`, {
+        body: JSON.stringify({
+          event_type: eventType,
+          funnel_id: selectedFunnel.id,
+          message_content: options.messageContent ?? message,
+          step_id: options.advanceTo?.id ?? activeStep.id,
+          step_order: options.advanceTo?.step_order ?? activeStep.step_order,
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
-      });
-    } catch {
-      // Workspace telemetry must not interrupt a manual approach.
-    }
-  }
-
-  async function handleDiversifyMessage() {
-    if (!selectedLead) {
-      toast({
-        title: "Selecione um lead",
-        description: "Escolha um lead antes de diversificar a mensagem.",
-        variant: "error",
-      });
-      return;
-    }
-
-    if (!copyBase.trim()) {
-      toast({
-        title: "Informe a copy base",
-        description: "A mensagem diversificada precisa partir de uma copy base.",
-        variant: "error",
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      const response = await fetch("/api/whatsapp/diversify-message", {
-        body: JSON.stringify({ baseCopy: copyBase, city, leadId: selectedLead.id, niche, variantSeed }),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      const payload = (await response.json()) as GeneratedMessageResponse & { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Não foi possível diversificar a mensagem.");
-      }
-
-      setMessage(payload.message);
-      setMessageId(payload.savedMessage.id);
-      setMessageStats(payload.stats ?? null);
-      setVariantSeed((current) => current + 1);
-      toast({ title: "Mensagem diversificada", description: "A variação foi preparada para abordagem manual.", variant: "success" });
+      }).then((response) => parseJson<{ event: LeadMessageEvent }>(response));
+      await loadState(selectedLead.id);
     } catch (error) {
       toast({
-        title: "Erro ao diversificar mensagem",
+        title: "Erro ao registrar ação",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
     } finally {
-      setIsGenerating(false);
+      setIsActing(false);
     }
   }
 
@@ -234,63 +343,73 @@ export function WhatsAppPageContent() {
 
     try {
       await copyWorkspaceMessage(message);
-      void recordWorkspaceAction("copied");
+      await recordEvent("copied");
       toast({ title: "Mensagem copiada", description: "Cole e envie manualmente no WhatsApp.", variant: "success" });
     } catch {
-      toast({ title: "Não foi possível copiar", description: "Selecione o texto da mensagem e copie manualmente.", variant: "error" });
+      toast({ title: "Não foi possível copiar", description: "Selecione o texto e copie manualmente.", variant: "error" });
     }
   }
 
-  function handleOpenWhatsApp() {
+  async function handleOpenWhatsApp() {
     if (!workspaceWaLink) {
       toast({
         title: "WhatsApp indisponível",
-        description: "Este lead não possui telefone ou WhatsApp válido. Use Instagram, site ou pule para o próximo.",
+        description: "Este lead não possui WhatsApp válido. Use Instagram, site ou pule para o próximo.",
         variant: "error",
       });
       return;
     }
 
     if (!openReusableWorkspaceWindow(workspaceWaLink, "whatsapp")) {
-      toast({ title: "Pop-up bloqueado", description: "Permita a abertura de janelas para usar o WhatsApp manualmente.", variant: "error" });
+      toast({ title: "Pop-up bloqueado", description: "Permita abertura de janelas para continuar.", variant: "error" });
       return;
     }
 
-    void recordWorkspaceAction("opened");
+    await recordEvent("opened_whatsapp");
   }
 
-  function handleOpenAlternative(url: string, channel: "instagram" | "whatsapp") {
-    if (!openReusableWorkspaceWindow(url, channel)) {
-      toast({ title: "Pop-up bloqueado", description: "Permita a abertura de janelas para continuar.", variant: "error" });
-    }
-  }
-
-  async function handleMarkContacted() {
-    if (!selectedLead) {
+  async function handleDiversifyStep() {
+    if (!selectedLead || !activeStep || !selectedFunnel) {
       return;
     }
 
-    setIsMarkingContacted(true);
+    setIsActing(true);
 
     try {
-      const response = await fetch("/api/whatsapp/workspace-event", {
-        body: JSON.stringify({ action: "contacted", leadId: selectedLead.id, messageId: messageId ?? undefined }),
+      const payload = await fetch("/api/whatsapp/funnel-message/diversify", {
+        body: JSON.stringify({
+          funnelId: selectedFunnel.id,
+          leadId: selectedLead.id,
+          stepId: activeStep.id,
+          variantSeed,
+        }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
-      });
-      const payload = (await response.json()) as { error?: string };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Não foi possível atualizar o lead.");
-      }
-
-      setLeads((current) => current.map((lead) => lead.id === selectedLead.id ? { ...lead, pipeline_stage: "contacted", status: "contacted" } : lead));
-      toast({ title: "Lead marcado como contatado", variant: "success" });
+      }).then((response) => parseJson<DiversifyPayload>(response));
+      setMessage(payload.message);
+      setVariantSeed((current) => current + 1);
+      toast({ title: "Mensagem variada", description: "O passo foi mantido, só a abordagem mudou.", variant: "success" });
     } catch (error) {
-      toast({ title: "Erro ao atualizar lead", description: error instanceof Error ? error.message : "Tente novamente.", variant: "error" });
+      toast({
+        title: "Erro ao variar mensagem",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
     } finally {
-      setIsMarkingContacted(false);
+      setIsActing(false);
     }
+  }
+
+  async function handleAdvanceStep() {
+    if (!selectedFunnel || !activeStep || !selectedLead) {
+      return;
+    }
+
+    const nextStep =
+      selectedFunnel.steps.find((step) => step.step_order === activeStep.step_order + 1) ?? activeStep;
+    setActiveStepId(nextStep.id);
+    setMobileTab("message");
+    await recordEvent("advanced_step", { advanceTo: nextStep });
   }
 
   function handleNextLead() {
@@ -300,221 +419,278 @@ export function WhatsAppPageContent() {
 
     const nextIndex = selectedIndex < 0 || selectedIndex === approachLeads.length - 1 ? 0 : selectedIndex + 1;
     setLeadId(approachLeads[nextIndex].id);
+    setMobileTab("funnel");
+  }
+
+  function openAlternative(url: string, channel: "instagram" | "whatsapp") {
+    if (!openReusableWorkspaceWindow(url, channel)) {
+      toast({ title: "Pop-up bloqueado", description: "Permita abertura de janelas para continuar.", variant: "error" });
+    }
   }
 
   return (
     <section className="space-y-6">
       <PageHeader
-        actions={<StatusBadge tone="amber">Envio 100% manual</StatusBadge>}
-        description="Selecione o lead, diversifique a copy base e abra o canal correto sem automatizar disparos."
-        eyebrow="Central de abordagem"
-        title="Workspace de abordagem"
+        actions={<StatusBadge tone="amber">Envio manual via wa.me</StatusBadge>}
+        description="Siga um roteiro comercial por etapas, registre ações e avance a conversa sem automatizar envio."
+        eyebrow="Funil de mensagens"
+        title="Abordagem"
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <MetricCard accent="red" icon={Users} label="Leads carregados" value={leads.length} />
         <MetricCard accent="emerald" icon={MessageCircle} label="WhatsApp possível" value={whatsappReadyCount} />
-        <MetricCard accent="pink" icon={Instagram} label="Instagram sem WhatsApp" value={instagramOnlyCount} />
+        <MetricCard accent="blue" icon={CheckCircle2} label="Respostas no lead" value={repliedCount} />
       </div>
 
-      {isLoadingLeads ? (
+      {isLoading ? (
         <div className="flex min-h-72 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin text-red-600" />
-          Carregando leads...
+          Carregando funil de abordagem...
         </div>
-      ) : leads.length === 0 ? (
+      ) : leads.length === 0 || !selectedFunnel ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
           <MessageCircle className="mb-4 h-7 w-7 text-red-600" />
           <h2 className="text-lg font-semibold text-slate-950">Nenhum lead disponível</h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Salve leads na Prospecção para iniciar uma abordagem manual.</p>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+            Salve leads na Prospecção para iniciar um funil de abordagem manual.
+          </p>
         </div>
       ) : (
         <>
-        <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
-          {[
-            ["queue", "Fila"],
-            ["message", "Mensagem"],
-            ["action", "Ação"],
-          ].map(([id, label]) => (
-            <button
-              className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
-                mobileTab === id ? "bg-red-50 text-red-700" : "text-slate-500"
-              }`}
-              key={id}
-              onClick={() => setMobileTab(id as "queue" | "message" | "action")}
-              type="button"
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+          <div className="grid grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
+            {[
+              ["queue", "Fila"],
+              ["funnel", "Funil"],
+              ["message", "Mensagem"],
+              ["action", "Ação"],
+            ].map(([id, label]) => (
+              <button
+                className={`rounded-md px-2 py-2 text-xs font-semibold transition ${
+                  mobileTab === id ? "bg-red-50 text-red-700" : "text-slate-500"
+                }`}
+                key={id}
+                onClick={() => setMobileTab(id as typeof mobileTab)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
-        <div className="grid gap-5 xl:grid-cols-[0.8fr_1.25fr_0.85fr]">
-          <Card className={`${mobileTab === "queue" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-            <CardHeader>
-              <CardTitle>Fila de leads</CardTitle>
-              <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
-                <span>{approachLeads.length} leads na fila</span>
-                <label className="flex items-center gap-2 text-xs text-slate-600">
-                  <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" />
-                  Só WhatsApp válido
-                </label>
-              </div>
-            </CardHeader>
-            <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
-              {approachLeads.length === 0 ? (
-                <p className="rounded-md border border-dashed border-slate-300 p-4 text-sm leading-6 text-slate-500">
-                  Nenhum lead com WhatsApp possível ou confirmado nesta fila.
-                </p>
-              ) : approachLeads.map((lead, index) => {
-                const itemQualification = getLeadQualification(lead);
-                const active = lead.id === leadId;
-                const hasPhone = Boolean(getLeadPhone(lead));
+          <div className="grid gap-5 xl:grid-cols-[0.75fr_0.85fr_1.15fr]">
+            <Card className={`${mobileTab === "queue" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
+              <CardHeader>
+                <CardTitle>Fila de leads</CardTitle>
+                <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
+                  <span>{approachLeads.length} leads na fila</span>
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
+                    <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" />
+                    Só WhatsApp
+                  </label>
+                </div>
+              </CardHeader>
+              <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
+                {approachLeads.map((lead, index) => {
+                  const active = lead.id === leadId;
+                  const hasPhone = Boolean(getLeadPhone(lead));
 
-                return (
-                  <button
-                    className={`w-full rounded-md border p-3 text-left transition ${active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"}`}
-                    key={lead.id}
-                    onClick={() => {
-                      setLeadId(lead.id);
-                      setMobileTab("message");
-                    }}
-                    type="button"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-950">{lead.name}</p>
-                        <p className="mt-1 truncate text-xs text-slate-500">{[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}</p>
+                  return (
+                    <button
+                      className={`w-full rounded-md border p-3 text-left transition ${
+                        active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"
+                      }`}
+                      key={lead.id}
+                      onClick={() => {
+                        setLeadId(lead.id);
+                        setMobileTab("funnel");
+                      }}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-950">{lead.name}</p>
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-400">{index + 1}</span>
                       </div>
-                      <span className="text-xs text-slate-400">{index + 1}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : itemQualification.whatsapp_status === "landline" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>
-                        {hasPhone ? "WhatsApp possível" : itemQualification.whatsapp_status === "landline" ? "Telefone fixo" : "Sem WhatsApp"}
-                      </span>
-                      {itemQualification.instagram_status === "found" ? <span className="rounded-full bg-pink-50 px-2 py-0.5 text-xs font-medium text-pink-700">Instagram</span> : null}
-                    </div>
-                  </button>
-                );
-              })}
-            </CardContent>
-          </Card>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                          {hasPhone ? "WhatsApp possível" : "Sem WhatsApp"}
+                        </span>
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                          {active && state ? funnelStatusLabels[state.status] : "Funil"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
 
-          <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-            <CardHeader>
-              <CardTitle>Copy e mensagem</CardTitle>
-              <p className="text-sm text-slate-500">A copy base permanece a fonte principal da variação.</p>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-2">
-                <Label htmlFor="copyBase">Copy base</Label>
-                <textarea
-                  className="min-h-40 w-full rounded-md border border-input bg-white p-3 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  id="copyBase"
-                  onChange={(event) => { setCopyBase(event.target.value); setMessage(""); setMessageId(null); setMessageStats(null); }}
-                  placeholder="Ex: Olá LEAD, estamos selecionando empresas do nicho COPY em CIDADE. Posso te enviar mais detalhes?"
-                  value={copyBase}
-                />
-                <p className="text-xs leading-5 text-slate-500">Use CIDADE, COPY/NICHO e LEAD/EMPRESA, também entre chaves ou colchetes.</p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="grid gap-2"><Label htmlFor="city">Cidade</Label><Input id="city" onChange={(event) => setCity(event.target.value)} value={city} /></div>
-                <div className="grid gap-2"><Label htmlFor="niche">Nicho</Label><Input id="niche" onChange={(event) => setNiche(event.target.value)} value={niche} /></div>
-              </div>
-
-              <Button className="w-full sm:w-auto" disabled={isGenerating} onClick={handleDiversifyMessage} type="button">
-                {isGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                Diversificar mensagem
-              </Button>
-
-              <div className="border-t border-slate-100 pt-5">
-                <Label htmlFor="diversifiedMessage">Mensagem diversificada</Label>
-                <textarea
-                  className="mt-2 min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                  id="diversifiedMessage"
-                  onChange={(event) => { setMessage(event.target.value); setMessageStats(null); }}
-                  placeholder="A mensagem diversificada aparecerá aqui."
-                  value={message}
-                />
-                {messageStats ? (
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-2 py-1">
-                      {messageStats.finalLength} caracteres
-                    </span>
-                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
-                      {messageStats.reductionPercent}% menor
-                    </span>
-                    <span className="rounded-full bg-red-50 px-2 py-1 text-red-700">
-                      {messageStats.transformationsApplied} variações aplicadas
-                    </span>
-                    {messageStats.warnings.length > 0 ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">
-                        Revisar detalhes da copy
-                      </span>
-                    ) : null}
+            <Card className={`${mobileTab === "funnel" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
+              <CardHeader>
+                <CardTitle>{selectedFunnel.name}</CardTitle>
+                <p className="text-sm leading-6 text-slate-500">{selectedFunnel.description}</p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {isLoadingState ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin text-red-600" />
+                    Carregando estado...
                   </div>
                 ) : null}
-              </div>
-            </CardContent>
-          </Card>
+                {selectedFunnel.steps.map((step) => {
+                  const active = step.id === activeStep?.id;
+                  const completed = state ? step.step_order < state.current_step_order : false;
 
-          <div className={`${mobileTab === "action" ? "block" : "hidden"} space-y-5 xl:block`}>
-            <Card className="border-slate-200 bg-white shadow-sm">
-              <CardHeader><CardTitle>Ação manual</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                  <p className="font-semibold text-slate-950">{selectedLead?.name}</p>
-                  <p className="mt-1">{getLeadPhone(selectedLead) ?? selectedLead?.phone ?? selectedLead?.phone_2 ?? "Sem telefone cadastrado"}</p>
-                  {selectedLead?.city ? <p className="mt-1 text-xs text-slate-500">{selectedLead.city}{selectedLead.state ? `, ${selectedLead.state}` : ""}</p> : null}
-                </div>
-
-                <Button className="w-full" disabled={!message || !workspaceWaLink} onClick={handleOpenWhatsApp} type="button">
-                  <MessageCircle className="h-4 w-4" />
-                  Abrir/atualizar WhatsApp
-                  <ExternalLink className="h-4 w-4" />
-                </Button>
-                <Button className="w-full" disabled={!message} onClick={handleCopyMessage} type="button" variant="outline">
-                  <Clipboard className="h-4 w-4" /> Copiar mensagem
-                </Button>
-                <Button className="w-full" disabled={isMarkingContacted} onClick={handleMarkContacted} type="button" variant="outline">
-                  {isMarkingContacted ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Marcar como contatado
-                </Button>
-                <Button className="w-full" onClick={handleNextLead} type="button" variant="ghost">
-                  <SkipForward className="h-4 w-4" /> Próximo lead <ChevronRight className="h-4 w-4" />
-                </Button>
+                  return (
+                    <button
+                      className={`w-full rounded-lg border p-3 text-left transition ${
+                        active ? "border-red-300 bg-red-50" : completed ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 hover:bg-slate-50"
+                      }`}
+                      key={step.id}
+                      onClick={() => {
+                        setActiveStepId(step.id);
+                        setMobileTab("message");
+                      }}
+                      type="button"
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-red-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                          {step.step_order}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-950">{step.name}</p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">{step.objective}</p>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
               </CardContent>
             </Card>
 
-            <Card className="border-slate-200 bg-white shadow-sm">
-              <CardHeader><CardTitle>Alternativas de contato</CardTitle></CardHeader>
-              <CardContent className="space-y-3">
-                {!getLeadPhone(selectedLead) ? <p className="text-sm leading-6 text-amber-800">Sem WhatsApp válido. Use um canal público alternativo ou pule este lead.</p> : null}
-                {instagramUrl ? <Button className="w-full" onClick={() => handleOpenAlternative(instagramUrl, "instagram")} type="button" variant="outline"><Instagram className="h-4 w-4 text-pink-600" /> Abrir Instagram</Button> : null}
-                {websiteUrl ? <Button className="w-full" onClick={() => handleOpenAlternative(websiteUrl, "instagram")} type="button" variant="outline"><Globe2 className="h-4 w-4" /> Abrir site</Button> : null}
-                {!instagramUrl && !websiteUrl ? <p className="text-sm text-slate-500">Este lead não possui Instagram ou site público disponível.</p> : null}
-              </CardContent>
-            </Card>
+            <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} space-y-5 xl:block`}>
+              <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
+                <CardHeader>
+                  <CardTitle>Mensagem sugerida</CardTitle>
+                  <p className="text-sm leading-6 text-slate-500">
+                    {activeStep ? `Passo ${activeStep.step_order} — ${activeStep.name}` : "Selecione um passo do funil."}
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+                    <p className="font-semibold text-slate-950">{getLeadCompany(selectedLead)}</p>
+                    <p className="mt-1">
+                      {[selectedLead?.city, selectedLead?.category].filter(Boolean).join(" · ") || "Sem contexto"}
+                    </p>
+                    <p className="mt-1 text-xs">{state ? funnelStatusLabels[state.status] : "Não iniciado"}</p>
+                  </div>
+                  <textarea
+                    className="min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => setMessage(event.target.value)}
+                    value={message}
+                  />
+                  {activeStep?.wait_hint ? (
+                    <p className="text-xs leading-5 text-slate-500">{activeStep.wait_hint}</p>
+                  ) : null}
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button disabled={isActing || !activeStep} onClick={handleDiversifyStep} type="button" variant="outline">
+                      <Sparkles className="h-4 w-4" />
+                      Variar mensagem
+                    </Button>
+                    <Button disabled={!message || isActing} onClick={handleCopyMessage} type="button">
+                      <Clipboard className="h-4 w-4" />
+                      Copiar mensagem
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
 
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs leading-5 text-slate-600">
-              O WhatsApp Web não pode ser incorporado com segurança dentro do PubLeads por restrições do próprio serviço. O botão acima reutiliza uma única janela do WhatsApp, sem abrir uma nova guia a cada lead.
+              <Card className={`${mobileTab === "action" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
+                <CardHeader>
+                  <CardTitle>Ação manual</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Button className="w-full" disabled={!message || !workspaceWaLink || isActing} onClick={handleOpenWhatsApp} type="button">
+                    <MessageCircle className="h-4 w-4" />
+                    Abrir/atualizar WhatsApp
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_sent")} type="button" variant="outline">
+                    <Send className="h-4 w-4" />
+                    Marcar como enviado
+                  </Button>
+                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_replied")} type="button" variant="outline">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Marcar que respondeu
+                  </Button>
+                  <Button className="w-full" disabled={isActing} onClick={handleAdvanceStep} type="button" variant="outline">
+                    Avançar etapa
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("skipped")} type="button" variant="ghost">
+                    Pular lead
+                  </Button>
+                  <Button className="w-full" onClick={handleNextLead} type="button" variant="ghost">
+                    <SkipForward className="h-4 w-4" />
+                    Próximo lead
+                  </Button>
+
+                  {!getLeadPhone(selectedLead) ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-800">
+                      Lead sem WhatsApp válido. Use um canal alternativo ou pause a abordagem.
+                    </div>
+                  ) : null}
+                  {instagramUrl ? <Button className="w-full" onClick={() => openAlternative(instagramUrl, "instagram")} type="button" variant="outline"><Instagram className="h-4 w-4 text-pink-600" /> Abrir Instagram</Button> : null}
+                  {websiteUrl ? <Button className="w-full" onClick={() => openAlternative(websiteUrl, "instagram")} type="button" variant="outline"><Globe2 className="h-4 w-4" /> Abrir site</Button> : null}
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader>
+                  <CardTitle>Histórico da abordagem</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {events.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
+                      Nenhuma ação registrada neste lead ainda.
+                    </p>
+                  ) : (
+                    events.slice(0, 8).map((event) => (
+                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3" key={event.id}>
+                        <p className="text-sm font-semibold text-slate-950">
+                          {eventLabels[event.event_type] ?? event.event_type}
+                          {event.step_order ? ` · passo ${event.step_order}` : ""}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(event.created_at)}</p>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
-        </div>
-        <div className="fixed inset-x-3 bottom-20 z-30 grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.18)] xl:hidden">
-          <Button disabled={!message} onClick={handleCopyMessage} size="sm" type="button" variant="outline">
-            <Clipboard className="h-4 w-4" />
-            Copiar
-          </Button>
-          <Button disabled={!message || !workspaceWaLink} onClick={handleOpenWhatsApp} size="sm" type="button">
-            <MessageCircle className="h-4 w-4" />
-            WhatsApp
-          </Button>
-          <Button onClick={handleNextLead} size="sm" type="button" variant="outline">
-            Próximo
-          </Button>
-        </div>
+
+          <div className="fixed inset-x-3 bottom-20 z-30 grid grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-white p-2 shadow-[0_16px_40px_rgba(15,23,42,0.18)] xl:hidden">
+            <Button disabled={!message || isActing} onClick={handleCopyMessage} size="sm" type="button" variant="outline">
+              <Clipboard className="h-4 w-4" />
+              Copiar
+            </Button>
+            <Button disabled={!message || !workspaceWaLink || isActing} onClick={handleOpenWhatsApp} size="sm" type="button">
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp
+            </Button>
+            <Button disabled={isActing} onClick={() => recordEvent("marked_sent")} size="sm" type="button" variant="outline">
+              Enviado
+            </Button>
+            <Button disabled={isActing} onClick={handleAdvanceStep} size="sm" type="button" variant="outline">
+              Próximo
+            </Button>
+          </div>
         </>
       )}
     </section>

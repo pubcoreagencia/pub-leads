@@ -224,6 +224,69 @@ create unique index if not exists leads_user_source_place_unique_idx
 create index if not exists lead_notes_user_lead_idx on lead_notes(user_id, lead_id);
 create index if not exists lead_messages_user_lead_idx on lead_messages(user_id, lead_id);
 create index if not exists search_logs_user_created_at_idx on search_logs(user_id, created_at);
+create table if not exists message_funnels (
+  id text primary key,
+  user_id text,
+  name text not null,
+  description text,
+  is_default integer not null default 0,
+  is_active integer not null default 1,
+  metadata text not null default '{}',
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
+);
+
+create table if not exists message_funnel_steps (
+  id text primary key,
+  funnel_id text not null,
+  user_id text,
+  step_order integer not null,
+  name text not null,
+  objective text,
+  trigger_condition text,
+  template text not null,
+  fallback_template text,
+  channel text not null default 'whatsapp',
+  wait_hint text,
+  metadata text not null default '{}',
+  is_active integer not null default 1,
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
+);
+
+create table if not exists lead_funnel_states (
+  id text primary key,
+  user_id text not null,
+  lead_id text not null,
+  funnel_id text not null,
+  current_step_id text,
+  current_step_order integer not null default 1,
+  status text not null default 'not_started',
+  last_message_at text,
+  last_reply_at text,
+  next_follow_up_at text,
+  metadata text not null default '{}',
+  created_at text not null default current_timestamp,
+  updated_at text not null default current_timestamp
+);
+
+create table if not exists lead_message_events (
+  id text primary key,
+  user_id text not null,
+  lead_id text not null,
+  funnel_id text,
+  step_id text,
+  step_order integer,
+  event_type text not null,
+  message_content text,
+  channel text not null default 'whatsapp',
+  metadata text not null default '{}',
+  created_at text not null default current_timestamp
+);
+
+create index if not exists message_funnel_steps_funnel_idx on message_funnel_steps(funnel_id, step_order);
+create unique index if not exists lead_funnel_states_user_lead_unique_idx on lead_funnel_states(user_id, lead_id);
+create index if not exists lead_message_events_user_lead_idx on lead_message_events(user_id, lead_id, created_at);
 create index if not exists search_logs_user_source_idx on search_logs(user_id, source);
 create index if not exists apify_runs_user_started_idx on apify_runs(user_id, started_at);
 create index if not exists apify_runs_user_source_idx on apify_runs(user_id, source_id, source_category);
@@ -281,4 +344,28 @@ for each row
 when new.updated_at = old.updated_at
 begin
   update apify_sources set updated_at = current_timestamp where id = old.id;
+end;
+
+create trigger if not exists message_funnels_set_updated_at
+after update on message_funnels
+for each row
+when new.updated_at = old.updated_at
+begin
+  update message_funnels set updated_at = current_timestamp where id = old.id;
+end;
+
+create trigger if not exists message_funnel_steps_set_updated_at
+after update on message_funnel_steps
+for each row
+when new.updated_at = old.updated_at
+begin
+  update message_funnel_steps set updated_at = current_timestamp where id = old.id;
+end;
+
+create trigger if not exists lead_funnel_states_set_updated_at
+after update on lead_funnel_states
+for each row
+when new.updated_at = old.updated_at
+begin
+  update lead_funnel_states set updated_at = current_timestamp where id = old.id;
 end;

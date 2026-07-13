@@ -26,6 +26,7 @@ export async function fetchLeads(filters: LeadFilters = {}) {
   appendFilter(params, "status", filters.status);
   appendFilter(params, "source", filters.source);
   appendFilter(params, "onlyWithPhone", filters.onlyWithPhone ? true : undefined);
+  appendFilter(params, "savedDate", filters.savedDate);
   appendFilter(params, "qualification", filters.qualification);
   appendFilter(params, "site", filters.site);
 

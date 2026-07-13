@@ -15,6 +15,7 @@ const listSchema = z.object({
   city: z.string().trim().optional(),
   name: z.string().trim().optional(),
   onlyWithPhone: z.enum(["true", "false"]).optional(),
+  savedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   qualification: z
     .enum(["all", "with_whatsapp", "without_whatsapp", "with_instagram", "without_instagram"])
     .optional(),
@@ -130,6 +131,7 @@ export async function GET(request: Request) {
     city: parsed.data.city || undefined,
     name: parsed.data.name || undefined,
     onlyWithPhone: parsed.data.onlyWithPhone === "true",
+    savedDate: parsed.data.savedDate,
     qualification: parsed.data.qualification,
     site: parsed.data.site,
     source: parsed.data.source,

@@ -328,6 +328,17 @@ export async function listLeads(userId: string, filters: LeadListFilters = {}) {
     clauses.push("(phone is not null or phone_2 is not null)");
   }
 
+  if (filters.savedDate) {
+    const start = new Date(`${filters.savedDate}T00:00:00.000Z`);
+
+    if (!Number.isNaN(start.getTime())) {
+      const end = new Date(start);
+      end.setUTCDate(end.getUTCDate() + 1);
+      clauses.push("datetime(created_at) >= datetime(?) and datetime(created_at) < datetime(?)");
+      args.push(start.toISOString(), end.toISOString());
+    }
+  }
+
   if (filters.qualification === "with_whatsapp") {
     clauses.push(
       "(raw_data like '%whatsapp_status%confirmed%' or raw_data like '%whatsapp_status%possible%')",

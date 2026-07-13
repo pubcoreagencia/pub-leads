@@ -40,6 +40,7 @@ type FilterState = {
   status: LeadStatus | "all";
   source: LeadSource | "all";
   onlyWithPhone: boolean;
+  savedDate: string;
   qualification: NonNullable<LeadFilters["qualification"]>;
   site: NonNullable<LeadFilters["site"]>;
 };
@@ -51,6 +52,7 @@ const initialFilters: FilterState = {
   status: "all",
   source: "all",
   onlyWithPhone: false,
+  savedDate: "",
   qualification: "all",
   site: "all",
 };
@@ -65,6 +67,7 @@ function toLeadFilters(filters: FilterState): LeadFilters {
     site: filters.site,
     status: filters.status,
     source: filters.source,
+    savedDate: filters.savedDate || undefined,
   };
 }
 
@@ -483,6 +486,15 @@ export function LeadsPageContent() {
                 <option value="without_site">Sem site</option>
               </select>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="filter-saved-date">Salvos em</Label>
+              <Input
+                id="filter-saved-date"
+                onChange={(event) => setFilters((current) => ({ ...current, savedDate: event.target.value }))}
+                type="date"
+                value={filters.savedDate}
+              />
+            </div>
             <label className="flex h-11 items-center gap-2 self-end rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-600">
               <input
                 checked={filters.onlyWithPhone}
@@ -647,6 +659,13 @@ export function LeadsPageContent() {
                       <Button onClick={() => openLeadModal(lead)} size="sm" type="button" variant="outline">
                         Detalhes
                       </Button>
+                      <a
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md border border-red-200 px-3 text-xs font-semibold text-red-700 transition hover:bg-red-50"
+                        href="/app/whatsapp"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5" />
+                        Abrir funil
+                      </a>
                     </div>
                   </article>
                 );
@@ -785,6 +804,12 @@ export function LeadsPageContent() {
                         <div className="flex flex-wrap gap-2">
                           <Button onClick={() => openLeadModal(lead)} size="sm" type="button" variant="outline">
                             Detalhes
+                          </Button>
+                          <Button asChild size="sm" type="button" variant="outline">
+                            <a href="/app/whatsapp">
+                              <MessageCircle className="h-4 w-4" />
+                              Abrir funil
+                            </a>
                           </Button>
                           {!hasContactPhone(lead) ? (
                             <Button
