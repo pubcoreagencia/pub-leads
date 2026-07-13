@@ -6,7 +6,7 @@ import type { LeadFormValues } from "@/schemas/lead";
 import { leadFormSchema, leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
 import { extractInstagramFromTextOrUrl } from "@/src/lib/lead-qualification/qualifier";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
-import { createLead, deleteLeads, listLeads } from "@/src/lib/turso/leads-repository";
+import { createLead, deleteLeads, listLeads, updateLeadsStatus } from "@/src/lib/turso/leads-repository";
 import type { JsonRecord } from "@/src/lib/turso/types";
 import type { LeadWriteInput } from "@/src/lib/turso/types";
 
@@ -26,6 +26,11 @@ const listSchema = z.object({
 
 const bulkDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(100),
+});
+
+const bulkStatusSchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(100),
+  status: leadStatusSchema,
 });
 
 function cleanOptional(value: string | undefined) {
@@ -161,6 +166,29 @@ export async function POST(request: Request) {
   const lead = await createLead(userId, formToLeadInput(parsed.data));
 
   return NextResponse.json({ lead });
+}
+
+export async function PATCH(request: Request) {
+  if (!hasTursoConfig()) {
+    return NextResponse.json({ error: getTursoUnavailableMessage() }, { status: 503 });
+  }
+
+  const userId = await getUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  const body = await request.json().catch(() => null);
+  const parsed = bulkStatusSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Atualizacao de leads invalida." }, { status: 400 });
+  }
+
+  const updatedCount = await updateLeadsStatus(userId, parsed.data.ids, parsed.data.status);
+
+  return NextResponse.json({ updatedCount });
 }
 
 export async function DELETE(request: Request) {

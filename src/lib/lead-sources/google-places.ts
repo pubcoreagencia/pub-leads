@@ -1,5 +1,4 @@
-import { leadCategoryLabels } from "@/config/lead-categories";
-import type { LeadCategoryId } from "@/config/lead-categories";
+import { getLeadCategoryLabel, resolveLeadCategoryId, type LeadCategoryId } from "@/config/lead-categories";
 import type {
   GooglePlacesSearchParams,
   LeadSourceProvider,
@@ -104,7 +103,7 @@ export function hasGooglePlacesConfig() {
 }
 
 function buildTextQuery(params: GooglePlacesSearchParams) {
-  const category = leadCategoryLabels[params.category];
+  const category = getLeadCategoryLabel(params.category);
 
   return `${category} em ${params.city}, ${params.state}, ${params.country}`;
 }
@@ -179,7 +178,7 @@ function toNormalizedLead(place: GooglePlace, params: GooglePlacesSearchParams):
   const category =
     place.primaryTypeDisplayName?.text ??
     place.primaryType ??
-    leadCategoryLabels[params.category];
+    getLeadCategoryLabel(params.category);
 
   return {
     address: place.formattedAddress ?? null,
@@ -255,7 +254,8 @@ async function requestGooglePlaces(
     throw new Error("Google Places nao configurado. Defina GOOGLE_PLACES_API_KEY no .env.local e na Vercel.");
   }
 
-  const includedType = googleIncludedTypes[params.category];
+  const categoryId = resolveLeadCategoryId(params.category);
+  const includedType = categoryId ? googleIncludedTypes[categoryId] : undefined;
   const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
     body: JSON.stringify({
       includedType,

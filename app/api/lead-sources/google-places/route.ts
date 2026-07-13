@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { leadCategories, type LeadCategoryId } from "@/config/lead-categories";
 import { createClient } from "@/lib/supabase/server";
 import { googlePlacesProvider, hasGooglePlacesConfig } from "@/src/lib/lead-sources/google-places";
 import type { GooglePlacesSearchParams, NormalizedLead } from "@/src/lib/lead-sources/types";
@@ -11,15 +10,11 @@ import { createSearchLog } from "@/src/lib/turso/search-logs-repository";
 import { canUseLeadSearchSource } from "@/src/lib/permissions/source-permissions";
 import { canSearch } from "@/src/lib/usage/limits";
 
-const categoryIds = leadCategories.map((category) => category.id);
-
 const searchSchema = z.object({
   city: z.string().trim().min(2),
   state: z.string().trim().min(2),
   country: z.string().trim().min(2),
-  category: z
-    .string()
-    .refine((value) => categoryIds.includes(value as LeadCategoryId), "Categoria invalida."),
+  category: z.string().trim().min(2),
   onlyWithPhone: z.boolean().optional().default(false),
   onlyWithWebsite: z.boolean().optional().default(false),
   radiusKm: z.coerce.number().min(1).max(50),

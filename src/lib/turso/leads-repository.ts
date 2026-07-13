@@ -499,6 +499,22 @@ export async function updateLeadStatus(userId: string, leadId: string, status: L
   return updateLead(userId, leadId, { status });
 }
 
+export async function updateLeadsStatus(userId: string, leadIds: string[], status: LeadStatus) {
+  const ids = Array.from(new Set(leadIds.map(cleanString).filter(Boolean)));
+
+  if (ids.length === 0) {
+    return 0;
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await getTursoClient().execute({
+    args: [status, new Date().toISOString(), userId, ...ids],
+    sql: `update leads set status = ?, updated_at = ? where user_id = ? and id in (${placeholders})`,
+  });
+
+  return Number(result.rowsAffected ?? 0);
+}
+
 export async function countLeads(userId: string) {
   const result = await getTursoClient().execute({
     args: [userId],

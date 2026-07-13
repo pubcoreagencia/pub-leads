@@ -45,3 +45,55 @@ export const leadCategoryLabels = leadCategories.reduce<Record<LeadCategoryId, s
   },
   {} as Record<LeadCategoryId, string>,
 );
+
+function normalizeCategoryText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+const categoryAliases: Record<string, LeadCategoryId> = {
+  bares: "bar",
+  cafeterias: "cafeteria",
+  clinica: "clinica",
+  "clinica medica": "clinica",
+  clinicas: "clinica",
+  "clinicas medicas": "clinica",
+  dentistas: "dentista",
+  hoteis: "hotel",
+  lojas: "loja",
+  mercados: "mercado",
+  oficinas: "oficina",
+  petshops: "pet_shop",
+  restaurantes: "restaurante",
+  salao: "salao_de_beleza",
+  "salao de beleza": "salao_de_beleza",
+  saloes: "salao_de_beleza",
+  "saloes de beleza": "salao_de_beleza",
+};
+
+export function resolveLeadCategoryId(value: string): LeadCategoryId | null {
+  const normalized = normalizeCategoryText(value);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const direct = leadCategories.find(
+    (category) =>
+      normalizeCategoryText(category.id) === normalized ||
+      normalizeCategoryText(category.label) === normalized,
+  );
+
+  return direct?.id ?? categoryAliases[normalized] ?? null;
+}
+
+export function getLeadCategoryLabel(value: string) {
+  const categoryId = resolveLeadCategoryId(value);
+
+  return categoryId ? leadCategoryLabels[categoryId] : value.trim();
+}

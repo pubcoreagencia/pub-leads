@@ -1,4 +1,3 @@
-import type { LeadCategoryId } from "@/config/lead-categories";
 import type { Lead } from "@/schemas/lead";
 import type { LeadQualification } from "@/src/lib/lead-qualification/qualifier";
 
@@ -14,7 +13,7 @@ export type LeadSourceSearchParams = {
   city: string;
   state: string;
   country: string;
-  category: LeadCategoryId;
+  category: string;
   radiusKm: number;
   limit: number;
 };

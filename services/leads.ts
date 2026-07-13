@@ -80,6 +80,18 @@ export async function deleteLeads(leadIds: string[]) {
   return payload.deletedCount;
 }
 
+export async function updateLeadsStatus(leadIds: string[], status: LeadStatus) {
+  const payload = await fetch("/api/leads", {
+    body: JSON.stringify({ ids: leadIds, status }),
+    headers: {
+      "Content-Type": "application/json",
+    },
+    method: "PATCH",
+  }).then((response) => parseJsonResponse<{ updatedCount: number }>(response));
+
+  return payload.updatedCount;
+}
+
 export async function fetchLeadNotes(leadId: string) {
   const payload = await fetch(`/api/leads/${leadId}/notes`, {
     cache: "no-store",

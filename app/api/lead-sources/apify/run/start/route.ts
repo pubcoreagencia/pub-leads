@@ -11,6 +11,7 @@ import { updateScrapingSession } from "@/src/lib/turso/scraping-sessions-reposit
 
 const schema = z.object({
   city: z.string().trim().optional(),
+  expectedCategory: z.enum(["google_maps", "instagram", "google_search", "generic"]).optional(),
   input: z.record(z.string(), z.unknown()).optional(),
   niche: z.string().trim().optional(),
   requestedLimit: z.coerce.number().int().min(1).max(100).optional(),
@@ -19,6 +20,68 @@ const schema = z.object({
   state: z.string().trim().optional(),
 });
 
+function unique(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function getNicheAliases(niche: string) {
+  const normalized = niche
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (normalized === "clinica") {
+    return ["clinicas", "clínicas", "clinica medica", "clínica médica"];
+  }
+
+  if (normalized === "dentista") {
+    return ["dentistas", "clinica odontologica", "clínica odontológica"];
+  }
+
+  return [];
+}
+
+function buildGoogleMapsQueries(data: z.infer<typeof schema>) {
+  const city = data.city ?? "";
+  const state = data.state ?? "";
+  const niche = data.niche ?? "";
+  const inputQuery = typeof data.input?.query === "string" ? data.input.query : "";
+  const location = [city, state, "Brasil"].filter(Boolean).join(", ");
+  const aliases = getNicheAliases(niche);
+
+  return unique([
+    inputQuery,
+    [niche, city, state, "Brasil"].filter(Boolean).join(" "),
+    niche && location ? `${niche} em ${location}` : "",
+    ...aliases.map((alias) => (location ? `${alias} em ${location}` : alias)),
+  ]).slice(0, 4);
+}
+
+function buildGoogleMapsInput(base: Record<string, unknown>, data: z.infer<typeof schema>, limit: number) {
+  const query = String(data.input?.query ?? [data.niche, data.city, data.state, "Brasil"].filter(Boolean).join(" "));
+  const searchStringsArray = buildGoogleMapsQueries(data);
+  const perSearchLimit = Math.max(1, Math.ceil(limit / Math.max(searchStringsArray.length, 1)));
+
+  return {
+    ...base,
+    ...(data.input ?? {}),
+    includeReviews: false,
+    language: "pt-BR",
+    limit,
+    maxCrawledPlaces: limit,
+    maxCrawledPlacesPerSearch: perSearchLimit,
+    maxImages: 0,
+    maxItems: limit,
+    maxPlacesPerSearch: perSearchLimit,
+    maxResults: limit,
+    maxReviews: 0,
+    query,
+    resultsLimit: limit,
+    search: query,
+    searchStringsArray: searchStringsArray.length > 0 ? searchStringsArray : [query],
+  };
+}
+
 function buildSourceInput(source: Awaited<ReturnType<typeof resolveApifySource>>, data: z.infer<typeof schema>, limit: number) {
   const city = data.city ?? "";
   const state = data.state ?? "";
@@ -26,20 +89,12 @@ function buildSourceInput(source: Awaited<ReturnType<typeof resolveApifySource>>
   const query = String(data.input?.query ?? [niche, city, state, "Brasil"].filter(Boolean).join(" "));
   const base = source?.defaultInput && typeof source.defaultInput === "object" ? source.defaultInput : {};
 
-  if (source?.kind === "task") {
-    return { ...base, ...(data.input ?? {}) };
+  if (source?.category === "google_maps") {
+    return buildGoogleMapsInput(base, data, limit);
   }
 
-  if (source?.category === "google_maps") {
-    return {
-      ...base,
-      ...(data.input ?? {}),
-      includeReviews: false,
-      maxCrawledPlacesPerSearch: limit,
-      maxImages: 0,
-      maxReviews: 0,
-      searchStringsArray: [query],
-    };
+  if (source?.kind === "task") {
+    return { ...base, ...(data.input ?? {}) };
   }
 
   if (source?.category === "instagram") {
@@ -93,6 +148,10 @@ export async function POST(request: Request) {
 
   if (!source) {
     return NextResponse.json({ error: "Fonte Apify nao permitida." }, { status: 403 });
+  }
+
+  if (parsed.data.expectedCategory && source.category !== parsed.data.expectedCategory) {
+    return NextResponse.json({ error: "A fonte Apify selecionada nao corresponde ao tipo de busca." }, { status: 400 });
   }
 
   const limit = Math.min(parsed.data.requestedLimit ?? getApifyMaxResultsPerRun(), getApifyMaxResultsPerRun());

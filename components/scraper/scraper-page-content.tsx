@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { leadCategories, type LeadCategoryId } from "@/config/lead-categories";
 import { toast } from "@/hooks/use-toast";
 import {
   getLeadQualification,
@@ -80,7 +79,7 @@ type SearchFormState = {
   city: string;
   state: string;
   country: string;
-  category: LeadCategoryId;
+  category: string;
   radiusKm: string;
   limit: string;
   onlyWithPhone: boolean;
@@ -116,11 +115,27 @@ type ApifySourcesPayload = ApifyAvailability & {
   sources: ApifySourceDefinition[];
 };
 
+const DEFAULT_COUNTRY = "Brasil";
+
+function pickGoogleMapsApifySource(sources: ApifySourceDefinition[], currentId?: string) {
+  const googleMapsSources = sources.filter((source) => source.category === "google_maps" && source.enabled);
+
+  if (currentId && googleMapsSources.some((source) => source.id === currentId)) {
+    return currentId;
+  }
+
+  return (
+    googleMapsSources.find((source) => source.isRecommended)?.id ??
+    googleMapsSources[0]?.id ??
+    ""
+  );
+}
+
 const initialForm: SearchFormState = {
   source: "site_sales",
   city: "",
   state: "",
-  country: "Brasil",
+  country: DEFAULT_COUNTRY,
   category: "restaurante",
   radiusKm: "5",
   limit: "25",
@@ -308,11 +323,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
   const [currentSession, setCurrentSession] = useState<ScrapingSession | null>(null);
   const [isDiscardingSession, setIsDiscardingSession] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const selectedApifySource = useMemo(
-    () => apifySources.find((source) => source.id === selectedApifySourceId) ?? null,
-    [apifySources, selectedApifySourceId],
+  const googleMapsApifySources = useMemo(
+    () => apifySources.filter((source) => source.category === "google_maps"),
+    [apifySources],
   );
-  const apifyEnabled = apifyAvailability.available && apifySources.some((source) => source.enabled);
+  const selectedApifySource = useMemo(
+    () => googleMapsApifySources.find((source) => source.id === selectedApifySourceId) ?? null,
+    [googleMapsApifySources, selectedApifySourceId],
+  );
+  const apifyEnabled = apifyAvailability.available && googleMapsApifySources.some((source) => source.enabled);
 
   useEffect(() => {
     let active = true;
@@ -324,15 +343,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
         setApifyAvailability(payload);
         setApifySources(Array.isArray(payload.sources) ? payload.sources : []);
         setSelectedApifySourceId((current) => {
-          if (current && payload.sources?.some((source) => source.id === current && source.enabled)) {
-            return current;
-          }
-
-          const nextSource =
-            payload.sources?.find((source) => source.enabled && source.isRecommended) ??
-            payload.sources?.find((source) => source.enabled);
-
-          return nextSource?.id ?? "";
+          return pickGoogleMapsApifySource(payload.sources ?? [], current);
         });
       })
       .catch(() => {
@@ -583,20 +594,14 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
 
       setApifySources(payload.sources);
       setSelectedApifySourceId((current) => {
-        if (current && payload.sources.some((source) => source.id === current && source.enabled)) {
-          return current;
-        }
-
-        const nextSource =
-          payload.sources.find((source) => source.enabled && source.isRecommended) ??
-          payload.sources.find((source) => source.enabled);
-
-        return nextSource?.id ?? "";
+        return pickGoogleMapsApifySource(payload.sources, current);
       });
       setApifyAvailability((current) => ({
         ...current,
-        available: payload.sources.some((source) => source.enabled) && current.reason !== "budget_exceeded",
-        reason: payload.sources.some((source) => source.enabled) ? current.reason ?? "ok" : current.reason,
+        available: payload.sources.some((source) => source.category === "google_maps" && source.enabled) && current.reason !== "budget_exceeded",
+        reason: payload.sources.some((source) => source.category === "google_maps" && source.enabled)
+          ? current.reason ?? "ok"
+          : current.reason,
       }));
       toast({
         title: "Fontes Apify atualizadas",
@@ -615,13 +620,13 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
   }
 
   async function createSearchSession(status: ScrapingSession["status"]) {
-    const category = leadCategories.find((item) => item.id === form.category);
+    const category = form.category.trim();
     const payload = await fetch("/api/scraping-sessions", {
       body: JSON.stringify({
         city: form.city,
         filters: { apifySourceId: selectedApifySourceId || null, form, qualificationFilter },
-        niche: category?.label ?? form.category,
-        query: category?.label ?? form.category,
+        niche: category,
+        query: category,
         requested_limit: Number(form.limit),
         source: form.source,
         status,
@@ -675,7 +680,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     setSelectedResultIds(new Set());
 
     try {
-      const category = leadCategories.find((item) => item.id === form.category);
+      const category = form.category.trim();
       if (form.source === "google_places" && !googlePlacesEnabled) {
         throw new Error("Google Places requer chave de API configurada.");
       }
@@ -687,14 +692,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           throw new Error("Selecione uma fonte Apify disponivel.");
         }
 
-        const query = [category?.label ?? form.category, form.city, form.state, form.country]
+        const query = [category, form.city, form.state, DEFAULT_COUNTRY]
           .filter(Boolean)
           .join(" ");
         const started = await fetch("/api/lead-sources/apify/run/start", {
           body: JSON.stringify({
             city: form.city,
+            expectedCategory: "google_maps",
             input: { query },
-            niche: category?.label ?? form.category,
+            niche: category,
             requestedLimit: limit,
             sourceId: selectedApifySourceId,
             state: form.state,
@@ -730,14 +736,14 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               city: form.city,
               limit,
               onlyWithPhone: form.onlyWithPhone,
-              query: category?.label ?? form.category,
+              query: category,
               state: form.state,
             }
           : form.source === "google_places"
             ? {
                 category: form.category,
                 city: form.city,
-                country: form.country,
+                country: DEFAULT_COUNTRY,
                 limit,
                 onlyWithPhone: form.onlyWithPhone,
                 onlyWithWebsite: form.onlyWithWebsite,
@@ -748,7 +754,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             ? {
                 category: form.category,
                 city: form.city,
-                country: form.country,
+                country: DEFAULT_COUNTRY,
                 limit,
                 onlyWithPhone: form.onlyWithPhone,
                 onlyWithoutWebsite: form.onlyWithoutWebsite,
@@ -758,7 +764,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           : {
               category: form.category,
               city: form.city,
-              country: form.country,
+              country: DEFAULT_COUNTRY,
               limit,
               radiusKm: Number(form.radiusKm),
               state: form.state,
@@ -814,7 +820,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
     let session: ScrapingSession | null = null;
 
     try {
-      const category = leadCategories.find((item) => item.id === form.category);
+      const category = form.category.trim();
       if (form.source === "google_places" && !googlePlacesEnabled) {
         throw new Error("Google Places requer chave de API configurada.");
       }
@@ -827,14 +833,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           throw new Error("Selecione uma fonte Apify disponivel.");
         }
 
-        const query = [category?.label ?? form.category, form.city, form.state, form.country]
+        const query = [category, form.city, form.state, DEFAULT_COUNTRY]
           .filter(Boolean)
           .join(" ");
         const started = await fetch("/api/lead-sources/apify/run/start", {
           body: JSON.stringify({
             city: form.city,
+            expectedCategory: "google_maps",
             input: { query },
-            niche: category?.label ?? form.category,
+            niche: category,
             requestedLimit: limit,
             sessionId: session.id,
             sourceId: selectedApifySourceId,
@@ -873,14 +880,14 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               city: form.city,
               limit,
               onlyWithPhone: form.onlyWithPhone,
-              query: category?.label ?? form.category,
+              query: category,
               state: form.state,
             }
           : form.source === "google_places"
             ? {
                 category: form.category,
                 city: form.city,
-                country: form.country,
+                country: DEFAULT_COUNTRY,
                 limit,
                 onlyWithPhone: form.onlyWithPhone,
                 onlyWithWebsite: form.onlyWithWebsite,
@@ -891,7 +898,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             ? {
                 category: form.category,
                 city: form.city,
-                country: form.country,
+                country: DEFAULT_COUNTRY,
                 limit,
                 onlyWithPhone: form.onlyWithPhone,
                 onlyWithoutWebsite: form.onlyWithoutWebsite,
@@ -901,7 +908,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           : {
               category: form.category,
               city: form.city,
-              country: form.country,
+              country: DEFAULT_COUNTRY,
               limit,
               radiusKm: Number(form.radiusKm),
               state: form.state,
@@ -1395,10 +1402,10 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                   onChange={(event) => setSelectedApifySourceId(event.target.value)}
                   value={selectedApifySourceId}
                 >
-                  {apifySources.length === 0 ? (
-                    <option value="">Nenhuma fonte Apify encontrada</option>
+                  {googleMapsApifySources.length === 0 ? (
+                    <option value="">Nenhuma fonte Google Maps encontrada</option>
                   ) : null}
-                  {apifySources.map((source) => (
+                  {googleMapsApifySources.map((source) => (
                     <option disabled={!source.enabled} key={source.id} value={source.id}>
                       {source.name} - {source.kind === "task" ? "Task" : "Actor"} - {source.category.replaceAll("_", " ")}
                     </option>
@@ -1409,7 +1416,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                     ? `${selectedApifySource.supportedUse ?? "Executar fonte Apify"} ${selectedApifySource.estimatedCostLabel ? `Custo estimado: ${selectedApifySource.estimatedCostLabel}.` : ""}`
                     : apifyAvailability.reason === "missing_token"
                       ? "APIFY_TOKEN nao foi detectado no servidor."
-                      : "Sincronize a conta para listar tasks e actors disponiveis."}
+                      : "Sincronize a conta para listar uma task ou actor de Google Maps."}
                 </p>
               </div>
             ) : null}
@@ -1436,32 +1443,15 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               />
             </div>
 
-            <div className="grid gap-2 xl:col-span-2">
-              <Label htmlFor="country">Pais</Label>
-              <Input
-                disabled={form.source === "cnpj_brasil"}
-                id="country"
-                onChange={(event) => updateField("country", event.target.value)}
-                placeholder="Brasil"
-                required
-                value={form.country}
-              />
-            </div>
-
-            <div className="grid gap-2 xl:col-span-2">
+            <div className="grid gap-2 xl:col-span-3">
               <Label htmlFor="category">Categoria</Label>
-              <select
-                className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+              <Input
                 id="category"
-                onChange={(event) => updateField("category", event.target.value as LeadCategoryId)}
+                onChange={(event) => updateField("category", event.target.value)}
+                placeholder="Ex: clinicas, escolas, contabilidades"
+                required
                 value={form.category}
-              >
-                {leadCategories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.label}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="grid gap-2 xl:col-span-2">

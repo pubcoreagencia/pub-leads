@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  CheckCircle2,
   Globe2,
   Instagram,
   Loader2,
@@ -11,7 +12,6 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
-  Sparkles,
   Trash2,
   Users,
 } from "lucide-react";
@@ -26,7 +26,7 @@ import { leadSourceLabels, leadStatusLabels } from "@/config/pipeline";
 import { toast } from "@/hooks/use-toast";
 import type { Lead, LeadFilters, LeadSource, LeadStatus } from "@/schemas/lead";
 import { leadSourceSchema, leadStatusSchema } from "@/schemas/lead";
-import { deleteLeads as deleteManyLeads, fetchLeads } from "@/services/leads";
+import { deleteLeads as deleteManyLeads, fetchLeads, updateLeadsStatus as updateManyLeadsStatus } from "@/services/leads";
 import {
   getLeadQualification,
   type LeadQualification,
@@ -154,8 +154,8 @@ export function LeadsPageContent() {
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [enrichingIds, setEnrichingIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
 
   const loadLeads = useCallback(async () => {
     setIsLoading(true);
@@ -280,50 +280,39 @@ export function LeadsPageContent() {
     }
   }
 
-  async function handleEnrichLead(lead: Lead) {
-    setEnrichingIds((current) => new Set(current).add(lead.id));
+  async function handleMarkSelectedContacted() {
+    const ids = Array.from(selectedLeadIds);
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    setIsBulkUpdating(true);
 
     try {
-      const response = await fetch("/api/leads/enrich/cnpj", {
-        body: JSON.stringify({ leadId: lead.id }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
+      const updatedCount = await updateManyLeadsStatus(ids, "contacted");
+      const selectedIds = new Set(ids);
+
+      setLeads((current) =>
+        current.map((lead) =>
+          selectedIds.has(lead.id) ? { ...lead, pipeline_stage: "contacted", status: "contacted" } : lead,
+        ),
+      );
+      setSelectedLeadIds(new Set());
+
+      toast({
+        title: "Leads marcados como contatados",
+        description: `${updatedCount} leads foram movidos para Contatado no Pipeline.`,
+        variant: "success",
       });
-      const payload = (await response.json()) as {
-        error?: string;
-        matched?: boolean;
-        message?: string;
-      };
-
-      if (!response.ok) {
-        throw new Error(payload.error ?? "Nao foi possivel enriquecer o lead.");
-      }
-
-      if (!payload.matched) {
-        toast({
-          title: "CNPJ nao encontrado",
-          description: payload.message ?? "Tente ajustar nome, cidade ou estado do lead.",
-          variant: "error",
-        });
-        return;
-      }
-
-      toast({ title: "Lead enriquecido com CNPJ", variant: "success" });
-      await loadLeads();
     } catch (error) {
       toast({
-        title: "Erro ao enriquecer",
+        title: "Erro ao atualizar leads",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
     } finally {
-      setEnrichingIds((current) => {
-        const next = new Set(current);
-        next.delete(lead.id);
-        return next;
-      });
+      setIsBulkUpdating(false);
     }
   }
 
@@ -527,8 +516,18 @@ export function LeadsPageContent() {
                 {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
               </span>
               <Button
+                className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                disabled={isBulkUpdating || isDeleting}
+                onClick={handleMarkSelectedContacted}
+                type="button"
+                variant="outline"
+              >
+                {isBulkUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Marcar como contatado
+              </Button>
+              <Button
                 className="border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800"
-                disabled={isDeleting}
+                disabled={isDeleting || isBulkUpdating}
                 onClick={handleDeleteSelected}
                 type="button"
                 variant="outline"
@@ -811,21 +810,6 @@ export function LeadsPageContent() {
                               Abrir funil
                             </a>
                           </Button>
-                          {!hasContactPhone(lead) ? (
-                            <Button
-                              disabled={enrichingIds.has(lead.id)}
-                              onClick={() => handleEnrichLead(lead)}
-                              size="sm"
-                              type="button"
-                            >
-                              {enrichingIds.has(lead.id) ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-4 w-4" />
-                              )}
-                              Enriquecer com CNPJ
-                            </Button>
-                          ) : null}
                         </div>
                       </td>
                     </tr>
@@ -853,8 +837,19 @@ export function LeadsPageContent() {
               {selectedCount} {selectedCount === 1 ? "lead selecionado" : "leads selecionados"}
             </span>
             <Button
+              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+              disabled={isBulkUpdating || isDeleting}
+              onClick={handleMarkSelectedContacted}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {isBulkUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              Contatado
+            </Button>
+            <Button
               className="border-red-200 text-red-700 hover:bg-red-100 hover:text-red-800"
-              disabled={isDeleting}
+              disabled={isDeleting || isBulkUpdating}
               onClick={handleDeleteSelected}
               size="sm"
               type="button"

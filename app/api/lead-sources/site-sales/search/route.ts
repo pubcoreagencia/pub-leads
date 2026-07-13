@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { leadCategories, type LeadCategoryId } from "@/config/lead-categories";
 import { createClient } from "@/lib/supabase/server";
 import { cnpjBaseHasData, cnpjBrasilProvider } from "@/src/lib/lead-sources/cnpj-brasil";
 import { overpassProvider } from "@/src/lib/lead-sources/overpass";
@@ -12,12 +11,8 @@ import { createSearchLog } from "@/src/lib/turso/search-logs-repository";
 import { canUseLeadSearchSource } from "@/src/lib/permissions/source-permissions";
 import { canSearch } from "@/src/lib/usage/limits";
 
-const categoryIds = leadCategories.map((category) => category.id);
-
 const siteSalesSearchSchema = z.object({
-  category: z
-    .string()
-    .refine((value) => categoryIds.includes(value as LeadCategoryId), "Categoria invalida."),
+  category: z.string().trim().min(2),
   city: z.string().trim().min(2),
   country: z.string().trim().min(2),
   limit: z.coerce.number().int().min(1).max(100),
@@ -28,7 +23,7 @@ const siteSalesSearchSchema = z.object({
 });
 
 type SiteSalesParams = z.infer<typeof siteSalesSearchSchema> & {
-  category: LeadCategoryId;
+  category: string;
 };
 
 type SearchResultLead = ExternalLead | NormalizedLead;
@@ -190,7 +185,6 @@ export async function POST(request: Request) {
   }
 
   const params = parsed.data as SiteSalesParams;
-  const category = leadCategories.find((item) => item.id === params.category);
   const warnings: string[] = [];
   const failures: string[] = [];
 
@@ -207,7 +201,7 @@ export async function POST(request: Request) {
         city: params.city,
         limit: params.limit,
         onlyWithPhone: params.onlyWithPhone,
-        query: category?.label ?? params.category,
+        query: params.category,
         state: params.state,
       });
 

@@ -1,4 +1,4 @@
-import { leadCategoryLabels, type LeadCategoryId } from "@/config/lead-categories";
+import { getLeadCategoryLabel, resolveLeadCategoryId, type LeadCategoryId } from "@/config/lead-categories";
 import type { ExternalLead, LeadSourceProvider, LeadSourceSearchParams } from "@/src/lib/lead-sources/types";
 
 type NominatimResult = {
@@ -56,6 +56,29 @@ function escapeOverpassString(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getCategoryTagFilters(category: string) {
+  const categoryId = resolveLeadCategoryId(category);
+
+  return categoryId ? categoryTagFilters[categoryId] : null;
+}
+
+function buildTextSelectors(params: LeadSourceSearchParams, scope: string) {
+  const pattern = escapeOverpassString(escapeRegex(params.category));
+
+  return [
+    `node["name"~"${pattern}",i]${scope};`,
+    `way["name"~"${pattern}",i]${scope};`,
+    `relation["name"~"${pattern}",i]${scope};`,
+    `node["brand"~"${pattern}",i]${scope};`,
+    `way["brand"~"${pattern}",i]${scope};`,
+    `relation["brand"~"${pattern}",i]${scope};`,
+  ].join("\n");
+}
+
 function getTag(tags: Record<string, string> | undefined, keys: string[]) {
   return keys.map((key) => tags?.[key]).find(Boolean) ?? null;
 }
@@ -111,14 +134,17 @@ async function geocodeLocation(params: LeadSourceSearchParams) {
 
 function buildOverpassQuery(params: LeadSourceSearchParams, latitude: number, longitude: number) {
   const radiusMeters = Math.max(1, Math.round(params.radiusKm * 1000));
-  const filters = categoryTagFilters[params.category];
+  const filters = getCategoryTagFilters(params.category);
+  const scope = `(around:${radiusMeters},${latitude},${longitude})`;
   const selectors = filters
-    .flatMap((filter) => [
-      `node["${filter.key}"="${filter.value}"](around:${radiusMeters},${latitude},${longitude});`,
-      `way["${filter.key}"="${filter.value}"](around:${radiusMeters},${latitude},${longitude});`,
-      `relation["${filter.key}"="${filter.value}"](around:${radiusMeters},${latitude},${longitude});`,
-    ])
-    .join("\n");
+    ? filters
+        .flatMap((filter) => [
+          `node["${filter.key}"="${filter.value}"]${scope};`,
+          `way["${filter.key}"="${filter.value}"]${scope};`,
+          `relation["${filter.key}"="${filter.value}"]${scope};`,
+        ])
+        .join("\n")
+    : buildTextSelectors(params, scope);
 
   return `[out:json][timeout:25];
 (
@@ -128,15 +154,17 @@ out center tags qt ${params.limit};`;
 }
 
 function buildOverpassAreaQuery(params: LeadSourceSearchParams) {
-  const filters = categoryTagFilters[params.category];
+  const filters = getCategoryTagFilters(params.category);
   const areaName = escapeOverpassString(params.city);
   const selectors = filters
-    .flatMap((filter) => [
-      `node["${filter.key}"="${filter.value}"](area.searchArea);`,
-      `way["${filter.key}"="${filter.value}"](area.searchArea);`,
-      `relation["${filter.key}"="${filter.value}"](area.searchArea);`,
-    ])
-    .join("\n");
+    ? filters
+        .flatMap((filter) => [
+          `node["${filter.key}"="${filter.value}"](area.searchArea);`,
+          `way["${filter.key}"="${filter.value}"](area.searchArea);`,
+          `relation["${filter.key}"="${filter.value}"](area.searchArea);`,
+        ])
+        .join("\n")
+    : buildTextSelectors(params, "(area.searchArea)");
 
   return `[out:json][timeout:25];
 area["boundary"="administrative"]["name"="${areaName}"]->.searchArea;
@@ -161,11 +189,11 @@ function toExternalLead(element: OverpassElement, params: LeadSourceSearchParams
 
   return {
     externalId: `${element.type}/${element.id}`,
-    name: getTag(tags, ["name", "brand", "operator"]) ?? `Sem nome (${leadCategoryLabels[params.category]})`,
+    name: getTag(tags, ["name", "brand", "operator"]) ?? `Sem nome (${getLeadCategoryLabel(params.category)})`,
     businessName: null,
     fantasyName: getTag(tags, ["name", "brand", "operator"]),
     cnpj: null,
-    category: leadCategoryLabels[params.category],
+    category: getLeadCategoryLabel(params.category),
     cnae: null,
     cnaeDescription: null,
     address: buildAddress(tags),
