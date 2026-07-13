@@ -65,6 +65,7 @@ type LeadMessageEvent = {
 type FunnelPayload = { funnels: MessageFunnel[] };
 type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
 type DiversifyPayload = { message: string; error?: string };
+type ProfilePayload = { fullName: string };
 
 const funnelStatusLabels: Record<LeadFunnelState["status"], string> = {
   contacted: "Contato feito",
@@ -121,7 +122,7 @@ function getLeadCompany(lead: Lead | null) {
   return lead?.company || lead?.business_name || lead?.fantasy_name || lead?.name || "Lead";
 }
 
-function renderLocalTemplate(template: string, lead: Lead | null) {
+function renderLocalTemplate(template: string, lead: Lead | null, operatorName: string) {
   if (!lead) {
     return "";
   }
@@ -142,7 +143,7 @@ function renderLocalTemplate(template: string, lead: Lead | null) {
     .replace(/\{empresa\}|\{lead\}|\bEMPRESA\b|\bLEAD\b/g, company)
     .replace(/\{cidade\}|\bCIDADE\b/g, city)
     .replace(/\{nicho\}|\{copy\}|\bNICHO\b|\bCOPY\b/g, niche)
-    .replace(/\{operador\}/g, "representante da Agência PUB")
+    .replace(/\{operador\}/g, operatorName || "representante")
     .replace(/\{telefone\}/g, lead.whatsapp || lead.phone || lead.phone_2 || "")
     .replace(/\{site\}/g, lead.website || "")
     .replace(/\{instagram\}/g, instagram)
@@ -173,6 +174,7 @@ export function WhatsAppPageContent() {
   const [events, setEvents] = useState<LeadMessageEvent[]>([]);
   const [activeStepId, setActiveStepId] = useState("");
   const [message, setMessage] = useState("");
+  const [operatorName, setOperatorName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingState, setIsLoadingState] = useState(false);
   const [isActing, setIsActing] = useState(false);
@@ -228,6 +230,13 @@ export function WhatsAppPageContent() {
     setFunnelId((current) => current || payload.funnels[0]?.id || "");
   }, []);
 
+  const loadProfile = useCallback(async () => {
+    const payload = await fetch("/api/profile", { cache: "no-store" }).then((response) =>
+      parseJson<ProfilePayload>(response),
+    );
+    setOperatorName(payload.fullName);
+  }, []);
+
   const loadState = useCallback(async (nextLeadId: string) => {
     if (!nextLeadId) {
       return;
@@ -257,7 +266,7 @@ export function WhatsAppPageContent() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([fetchLeads(), loadFunnels()])
+    Promise.all([fetchLeads(), loadFunnels(), loadProfile()])
       .then(([items]) => {
         if (!active) {
           return;
@@ -282,7 +291,7 @@ export function WhatsAppPageContent() {
     return () => {
       active = false;
     };
-  }, [loadFunnels]);
+  }, [loadFunnels, loadProfile]);
 
   useEffect(() => {
     if (leadId) {
@@ -302,8 +311,8 @@ export function WhatsAppPageContent() {
       return;
     }
 
-    setMessage(renderLocalTemplate(activeStep.template, selectedLead));
-  }, [activeStep, selectedLead]);
+    setMessage(renderLocalTemplate(activeStep.template, selectedLead, operatorName));
+  }, [activeStep, operatorName, selectedLead]);
 
   async function recordEvent(eventType: string, options: { advanceTo?: MessageFunnelStep | null; messageContent?: string | null } = {}) {
     if (!selectedLead || !activeStep || !selectedFunnel) {

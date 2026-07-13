@@ -1,12 +1,21 @@
 import { Database, KeyRound, MessageCircle, Settings, ShieldCheck, Zap } from "lucide-react";
 
+import { createClient } from "@/lib/supabase/server";
+import { ProfileNameForm } from "@/components/config/profile-name-form";
 import { PageHeader, SectionCard, StatusBadge } from "@/components/ops/page";
 
 function configured(value?: string) {
   return Boolean(value?.trim());
 }
 
-export default function ConfigPage() {
+export default async function ConfigPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle()
+    : { data: null };
   const apifyReady = configured(process.env.APIFY_TOKEN);
   const googleReady = configured(process.env.GOOGLE_PLACES_API_KEY) || configured(process.env.GOOGLE_MAPS_API_KEY);
   const tursoReady = configured(process.env.TURSO_DATABASE_URL) && configured(process.env.TURSO_AUTH_TOKEN);
@@ -70,6 +79,15 @@ export default function ConfigPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard
+          description="Defina o nome que aparece no placeholder {operador} do funil de mensagens."
+          title="Perfil comercial"
+        >
+          <ProfileNameForm
+            initialName={profile?.full_name ?? user?.user_metadata.full_name ?? user?.user_metadata.name ?? ""}
+          />
+        </SectionCard>
+
         <SectionCard
           description="O PubLeads prepara links e mensagens; o operador confirma e envia fora do sistema."
           title="Abordagem manual"

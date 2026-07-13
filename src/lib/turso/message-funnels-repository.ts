@@ -97,7 +97,7 @@ const defaultSteps = [
     name: "Introdução",
     objective: "Se apresentar e pedir permissão para explicar.",
     template:
-      "Tudo bem? Eu sou a {operador}, representante comercial da Agência PUB. Estou entrando em contato porque a {empresa} foi uma das 5 empresas de {nicho} selecionadas para o nosso {projeto}. Posso te explicar rapidamente como funciona?",
+      "Eu sou {operador}, representante comercial da Agência PUB. Estou entrando em contato porque a {empresa} foi uma das 5 empresas de {nicho} selecionadas para o nosso {projeto}. Posso te explicar rapidamente como funciona?",
     wait_hint: "Usar depois que o lead responder ao primeiro contato.",
   },
   {
@@ -111,7 +111,7 @@ const defaultSteps = [
     name: "Autoridade",
     objective: "Reforçar confiança.",
     template:
-      "A estrutura é feita pela Agência PUB, que já atuou com marcas e nomes como L'Oréal Paris, Globosat, Circo Voador, Gabriel Pensador, Diogo Defante e Paulinho Serra.",
+      "A estrutura é feita pela Agência PUB, que já atuou com marcas e nomes como L'Oréal Paris, Globosat, Circo Voador, Gabriel Pensador, Diogo Defante, Paulinho Serra e Vamos Dubai. O site do serviço é https://pub-start.pages.dev/",
     wait_hint: "Usar quando o lead pedir segurança, referências ou contexto.",
   },
   {

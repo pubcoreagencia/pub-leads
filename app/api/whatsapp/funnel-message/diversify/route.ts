@@ -54,8 +54,13 @@ export async function POST(request: Request) {
     step,
     variantSeed: parsed.data.variantSeed,
   });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
   const message = renderFunnelMessage({
-    context: { funnelName: funnel.name },
+    context: { funnelName: funnel.name, operatorName: profile?.full_name ?? null },
     lead,
     template: renderedTemplate,
     user,
