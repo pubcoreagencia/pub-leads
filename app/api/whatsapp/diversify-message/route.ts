@@ -13,6 +13,7 @@ const diversifyMessageSchema = z.object({
   city: z.string().trim().max(120).optional().default(""),
   copyBase: z.string().trim().min(10).max(5000).optional(),
   leadId: z.string().uuid(),
+  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short"]).optional().default("short_whatsapp"),
   niche: z.string().trim().max(120).optional().default(""),
   variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
 }).refine((data) => data.baseCopy || data.copyBase, {
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
   }
 
-  const { city, leadId, niche, variantSeed } = parsed.data;
+  const { city, leadId, mode, niche, variantSeed } = parsed.data;
   const baseCopy = parsed.data.baseCopy ?? parsed.data.copyBase ?? "";
   const lead = await getLeadById(user.id, leadId);
 
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
     baseCopy,
     city,
     lead,
+    mode,
     niche,
     variantSeed,
   });
@@ -67,7 +69,10 @@ export async function POST(request: Request) {
       city,
       diversificationScore: diversification.diversificationScore,
       diversified: true,
+      finalLength: diversification.stats.finalLength,
+      mode,
       niche,
+      reductionPercent: diversification.stats.reductionPercent,
       source: "base_copy_diversification",
       transformationsApplied: diversification.transformationsApplied,
     }),
@@ -78,6 +83,7 @@ export async function POST(request: Request) {
     diversificationScore: diversification.diversificationScore,
     message,
     savedMessage,
+    stats: diversification.stats,
     transformationsApplied: diversification.transformationsApplied,
     waLink,
   });

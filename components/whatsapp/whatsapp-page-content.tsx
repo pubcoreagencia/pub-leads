@@ -33,6 +33,13 @@ import { createWaLink } from "@/src/lib/whatsapp/wa-link";
 type GeneratedMessageResponse = {
   message: string;
   savedMessage: { id: string };
+  stats?: {
+    finalLength: number;
+    originalLength: number;
+    reductionPercent: number;
+    transformationsApplied: number;
+    warnings: string[];
+  };
   waLink: string | null;
 };
 
@@ -66,6 +73,7 @@ export function WhatsAppPageContent() {
   const [niche, setNiche] = useState("");
   const [message, setMessage] = useState("");
   const [messageId, setMessageId] = useState<string | null>(null);
+  const [messageStats, setMessageStats] = useState<GeneratedMessageResponse["stats"] | null>(null);
   const [isLoadingLeads, setIsLoadingLeads] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isMarkingContacted, setIsMarkingContacted] = useState(false);
@@ -144,6 +152,7 @@ export function WhatsAppPageContent() {
     setNiche(selectedLead.category ?? "");
     setMessage("");
     setMessageId(null);
+    setMessageStats(null);
     setVariantSeed(1);
   }, [selectedLead]);
 
@@ -204,6 +213,7 @@ export function WhatsAppPageContent() {
 
       setMessage(payload.message);
       setMessageId(payload.savedMessage.id);
+      setMessageStats(payload.stats ?? null);
       setVariantSeed((current) => current + 1);
       toast({ title: "Mensagem diversificada", description: "A variação foi preparada para abordagem manual.", variant: "success" });
     } catch (error) {
@@ -401,7 +411,7 @@ export function WhatsAppPageContent() {
                 <textarea
                   className="min-h-40 w-full rounded-md border border-input bg-white p-3 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="copyBase"
-                  onChange={(event) => { setCopyBase(event.target.value); setMessage(""); setMessageId(null); }}
+                  onChange={(event) => { setCopyBase(event.target.value); setMessage(""); setMessageId(null); setMessageStats(null); }}
                   placeholder="Ex: Olá LEAD, estamos selecionando empresas do nicho COPY em CIDADE. Posso te enviar mais detalhes?"
                   value={copyBase}
                 />
@@ -423,10 +433,28 @@ export function WhatsAppPageContent() {
                 <textarea
                   className="mt-2 min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="diversifiedMessage"
-                  onChange={(event) => setMessage(event.target.value)}
+                  onChange={(event) => { setMessage(event.target.value); setMessageStats(null); }}
                   placeholder="A mensagem diversificada aparecerá aqui."
                   value={message}
                 />
+                {messageStats ? (
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                    <span className="rounded-full bg-slate-100 px-2 py-1">
+                      {messageStats.finalLength} caracteres
+                    </span>
+                    <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                      {messageStats.reductionPercent}% menor
+                    </span>
+                    <span className="rounded-full bg-red-50 px-2 py-1 text-red-700">
+                      {messageStats.transformationsApplied} variações aplicadas
+                    </span>
+                    {messageStats.warnings.length > 0 ? (
+                      <span className="rounded-full bg-amber-50 px-2 py-1 text-amber-700">
+                        Revisar detalhes da copy
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </CardContent>
           </Card>
