@@ -1,8 +1,10 @@
-import { Database, KeyRound, MessageCircle, Settings, ShieldCheck, Zap } from "lucide-react";
+import { BarChart3, CreditCard, Database, KeyRound, MessageCircle, Settings, ShieldCheck, Zap } from "lucide-react";
 
 import { createClient } from "@/lib/supabase/server";
 import { ProfileNameForm } from "@/components/config/profile-name-form";
 import { PageHeader, SectionCard, StatusBadge } from "@/components/ops/page";
+import { getBillingRuntimeStatus } from "@/src/lib/billing/provider";
+import { getTrackingRuntimeStatus } from "@/src/lib/tracking/provider";
 
 function configured(value?: string) {
   return Boolean(value?.trim());
@@ -17,7 +19,9 @@ export default async function ConfigPage() {
     ? await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle()
     : { data: null };
   const apifyReady = configured(process.env.APIFY_TOKEN);
+  const billingStatus = getBillingRuntimeStatus();
   const googleReady = configured(process.env.GOOGLE_PLACES_API_KEY) || configured(process.env.GOOGLE_MAPS_API_KEY);
+  const trackingStatus = getTrackingRuntimeStatus();
   const tursoReady = configured(process.env.TURSO_DATABASE_URL) && configured(process.env.TURSO_AUTH_TOKEN);
 
   const integrations = [
@@ -48,6 +52,26 @@ export default async function ConfigPage() {
       label: "Google Places",
       status: googleReady ? "API key configurada" : "Oculto para busca",
       tone: googleReady ? "emerald" as const : "slate" as const,
+    },
+    {
+      description: billingStatus.billingProvider === "inter"
+        ? "Banco Inter será a fonte de verdade do pagamento quando o contrato oficial estiver conectado."
+        : "Provider mock ativo. Use apenas para navegação e desenvolvimento.",
+      icon: CreditCard,
+      label: "Billing",
+      status: billingStatus.billingProvider === "inter"
+        ? billingStatus.billingConfigured ? "Inter configurado" : "Inter pendente"
+        : "Mock ativo",
+      tone: billingStatus.billingProvider === "inter" && billingStatus.billingConfigured ? "emerald" as const : "amber" as const,
+    },
+    {
+      description: "Utmify é tracking/atribuição e nunca libera plano sozinha.",
+      icon: BarChart3,
+      label: "Tracking",
+      status: trackingStatus.trackingProvider === "utmify"
+        ? trackingStatus.trackingConfigured ? "Utmify configurada" : "Utmify pendente"
+        : "Desativado",
+      tone: trackingStatus.trackingProvider === "utmify" && trackingStatus.trackingConfigured ? "emerald" as const : "slate" as const,
     },
   ];
 

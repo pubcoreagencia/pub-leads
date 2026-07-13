@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getBillingProvider } from "@/src/lib/billing/provider";
 import type { BillablePlanId } from "@/src/lib/billing/types";
 
+export const runtime = "nodejs";
+
 const amountByPlan: Record<BillablePlanId, number> = {
   mensal: 14799,
   anual: 49799,

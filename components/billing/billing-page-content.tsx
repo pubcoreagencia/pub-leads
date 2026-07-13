@@ -8,6 +8,7 @@ import { PageHeader, StatusBadge } from "@/components/ops/page";
 import { PlanCard } from "@/components/billing/plan-card";
 import { paidBillingPlans, type BillingPlanId } from "@/config/billing-plans";
 import { toast } from "@/hooks/use-toast";
+import { attributionStorageKey, sanitizeAttributionParams } from "@/src/lib/tracking/utms";
 
 type CheckoutResponse = {
   checkoutUrl?: string;
@@ -19,6 +20,21 @@ export function BillingPageContent() {
   const [loadingPlanId, setLoadingPlanId] = useState<BillingPlanId | null>(null);
   const showDevCheckoutNotice = process.env.NODE_ENV !== "production";
 
+  function getStoredAttribution() {
+    if (typeof window === "undefined") {
+      return {};
+    }
+
+    try {
+      const stored = window.localStorage.getItem(attributionStorageKey);
+      const parsed = stored ? JSON.parse(stored) as { params?: unknown } : null;
+
+      return sanitizeAttributionParams(parsed?.params);
+    } catch {
+      return {};
+    }
+  }
+
   async function handleSubscribe(planId: BillingPlanId) {
     if (planId === "free") {
       return;
@@ -28,7 +44,7 @@ export function BillingPageContent() {
 
     try {
       const response = await fetch("/api/billing/checkout", {
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, utms: getStoredAttribution() }),
         headers: {
           "Content-Type": "application/json",
         },

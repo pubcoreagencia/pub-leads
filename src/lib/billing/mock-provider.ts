@@ -25,6 +25,7 @@ const webhookEventSchema = z.object({
 });
 
 export const mockBillingProvider: BillingProvider = {
+  configured: true,
   id: "mock",
   async createCheckoutSession(request: CheckoutRequest) {
     const configuredUrl = checkoutUrlByPlan[request.planId];
@@ -33,7 +34,9 @@ export const mockBillingProvider: BillingProvider = {
     return {
       planId: request.planId,
       checkoutUrl,
+      paymentId: request.paymentId ?? null,
       provider: "mock",
+      status: "mock",
     };
   },
   async parseWebhook(payload: unknown) {

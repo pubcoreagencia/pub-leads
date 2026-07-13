@@ -49,6 +49,17 @@ npm run turso:verify:cnpj
 
 Somente apos a verificacao passar, avalie `scripts/cleanup-supabase-leads.sql`. O arquivo esta comentado de proposito e nao deve ser executado antes da validacao em producao.
 
+## Billing e Tracking
+
+O PubLeads separa pagamento de tracking:
+
+- Banco Inter deve ser a fonte de verdade do pagamento quando `BILLING_PROVIDER=inter`.
+- Utmify deve ser usada apenas para tracking/dashboard/atribuicao quando `TRACKING_PROVIDER=utmify`.
+- Utmify nunca libera plano; plano so deve ser ativado apos confirmacao real do Banco Inter.
+- O provider mock continua disponivel com `BILLING_PROVIDER=mock`.
+
+Veja `docs/billing-inter-utmify.md` para envs, UTMs, status atual da integracao e migracao Supabase opcional.
+
 ## Validacao
 
 ```bash
