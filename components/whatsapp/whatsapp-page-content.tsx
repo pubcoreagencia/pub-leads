@@ -417,7 +417,6 @@ export function WhatsAppPageContent() {
       }).then((response) => parseJson<DiversifyPayload>(response));
       setMessage(payload.message);
       setVariantSeed((current) => current + 1);
-      toast({ title: "Mensagem variada", description: "O passo foi mantido, só a abordagem mudou.", variant: "success" });
     } catch (error) {
       toast({
         title: "Erro ao variar mensagem",
