@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Search,
   Send,
+  Settings2,
   SkipForward,
   Sparkles,
   Trash2,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
+import { LeadDetailModal } from "@/components/leads/lead-detail-modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -203,6 +205,7 @@ async function parseJson<T>(response: Response) {
 export function WhatsAppPageContent() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [leadId, setLeadId] = useState("");
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [funnels, setFunnels] = useState<MessageFunnel[]>([]);
   const [funnelId, setFunnelId] = useState("");
   const [state, setState] = useState<LeadFunnelState | null>(null);
@@ -525,6 +528,24 @@ export function WhatsAppPageContent() {
     }
   }
 
+  function handleLeadSettingsChanged() {
+    void fetchLeads()
+      .then((items) => {
+        setLeads(items);
+      })
+      .catch((error) => {
+        toast({
+          title: "Erro ao atualizar fila",
+          description: error instanceof Error ? error.message : "Tente novamente.",
+          variant: "error",
+        });
+      });
+  }
+
+  function openLeadSettings(lead: Lead) {
+    setEditingLead(lead);
+  }
+
   function openAlternative(url: string, channel: "instagram" | "whatsapp") {
     if (!openReusableWorkspaceWindow(url, channel)) {
       toast({ title: "Pop-up bloqueado", description: "Permita abertura de janelas para continuar.", variant: "error" });
@@ -645,6 +666,17 @@ export function WhatsAppPageContent() {
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <span className="text-xs text-slate-400">{index + 1}</span>
+                          <button
+                            aria-label={`Abrir configurações de ${lead.name}`}
+                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openLeadSettings(lead);
+                            }}
+                            type="button"
+                          >
+                            <Settings2 className="h-4 w-4" />
+                          </button>
                           <button
                             aria-label={`Excluir ${lead.name}`}
                             className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-100 hover:text-red-700"
@@ -843,6 +875,12 @@ export function WhatsAppPageContent() {
           </div>
         </>
       )}
+      <LeadDetailModal
+        lead={editingLead}
+        onChanged={handleLeadSettingsChanged}
+        onClose={() => setEditingLead(null)}
+        open={Boolean(editingLead)}
+      />
     </section>
   );
 }
