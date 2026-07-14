@@ -25,7 +25,7 @@ export function DashboardShell({
   const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(false);
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen overflow-x-hidden bg-slate-100">
       {mobileOpen ? (
         <div className="fixed inset-0 z-50 bg-slate-950/50 lg:hidden">
           <button
@@ -61,14 +61,14 @@ export function DashboardShell({
         </button>
       </div>
 
-      <div className={desktopSidebarCollapsed ? "lg:pl-20" : "lg:pl-72"}>
+      <div className={desktopSidebarCollapsed ? "min-w-0 lg:pl-20" : "min-w-0 lg:pl-72"}>
         <DashboardHeader
           currentPlan={currentPlan}
           onMenuClick={() => setMobileOpen(true)}
           userInitials={userInitials}
           userName={userName}
         />
-        <main className="mx-auto w-full max-w-none px-4 py-5 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-8">{children}</main>
+        <main className="mx-auto min-w-0 max-w-none overflow-x-hidden px-4 py-5 pb-28 sm:px-6 lg:px-8 lg:py-6 lg:pb-8">{children}</main>
       </div>
       <MobileBottomNav />
     </div>

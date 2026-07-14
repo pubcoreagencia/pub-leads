@@ -103,7 +103,7 @@ export function PipelinePageContent() {
   }
 
   return (
-    <section className="space-y-5">
+    <section className="min-w-0 space-y-5">
       <PageHeader
         actions={(
           <Button disabled={isLoading || isUpdating} onClick={loadLeads} type="button" variant="outline">
@@ -139,7 +139,7 @@ export function PipelinePageContent() {
         </div>
       ) : (
         <>
-          <div className="rounded-md border border-slate-200 bg-white p-2.5 shadow-sm">
+          <div className="min-w-0 rounded-md border border-slate-200 bg-white p-2.5 shadow-sm">
             <div className="flex gap-2 overflow-x-auto pb-1">
               {pipelineColumns.map((column) => {
                 const count = leadsByStatus[column.id].length;
@@ -222,10 +222,10 @@ export function PipelinePageContent() {
             </div>
           </div>
 
-          <div className="hidden md:block">
+          <div className="hidden min-w-0 md:block">
             <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-              <div className="overflow-x-auto pb-3">
-                <div className="grid min-w-[1760px] grid-cols-[repeat(7,minmax(240px,1fr))] gap-3">
+              <div className="max-w-full overflow-x-auto pb-3">
+                <div className="grid min-w-[1190px] grid-cols-[repeat(7,minmax(160px,1fr))] gap-3 2xl:min-w-0">
                   {pipelineColumns.map((column) => (
                     <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
                   ))}

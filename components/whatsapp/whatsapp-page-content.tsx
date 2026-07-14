@@ -680,7 +680,7 @@ export function WhatsAppPageContent() {
             ))}
           </div>
 
-          <div className="grid gap-5 xl:grid-cols-[0.75fr_0.85fr_1.15fr]">
+          <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(360px,0.95fr)_minmax(500px,1.25fr)]">
             <Card className={`${mobileTab === "queue" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
               <CardHeader>
                 <CardTitle>Fila de leads</CardTitle>
@@ -833,12 +833,13 @@ export function WhatsAppPageContent() {
               </CardContent>
             </Card>
 
+            <div className={`${mobileTab === "queue" ? "hidden" : "block"} grid min-w-0 gap-5 xl:grid xl:grid-cols-[minmax(230px,0.58fr)_minmax(420px,1fr)] 2xl:block`}>
             <Card className={`${mobileTab === "funnel" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
               <CardHeader>
                 <CardTitle>{selectedFunnel.name}</CardTitle>
                 <p className="text-sm leading-6 text-slate-500">{selectedFunnel.description}</p>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-2">
                 {isLoadingState ? (
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Loader2 className="h-4 w-4 animate-spin text-red-600" />
@@ -867,7 +868,7 @@ export function WhatsAppPageContent() {
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-slate-950">{step.name}</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-500">{step.objective}</p>
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{step.objective}</p>
                         </div>
                       </div>
                     </button>
@@ -876,7 +877,7 @@ export function WhatsAppPageContent() {
               </CardContent>
             </Card>
 
-            <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} space-y-5 xl:block`}>
+            <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
               <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
                 <CardHeader>
                   <CardTitle>Mensagem sugerida</CardTitle>
@@ -893,7 +894,7 @@ export function WhatsAppPageContent() {
                     <p className="mt-1 text-xs">{state ? funnelStatusLabels[state.status] : "Não iniciado"}</p>
                   </div>
                   <textarea
-                    className="min-h-56 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    className="min-h-44 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 xl:min-h-52"
                     onChange={(event) => setMessage(event.target.value)}
                     value={message}
                   />
@@ -982,6 +983,7 @@ export function WhatsAppPageContent() {
                   )}
                 </CardContent>
               </Card>
+            </div>
             </div>
           </div>
 
