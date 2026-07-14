@@ -24,7 +24,7 @@ import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
 import { deleteLeads, fetchLeads } from "@/services/leads";
 import { getLeadQualification } from "@/src/lib/lead-qualification/qualifier";
-import { applyTimeAwareGreeting } from "@/src/lib/whatsapp/message-funnel";
+import { applyOperatorIntroPhrase, applyTimeAwareGreeting, getOperatorIntroPhrase } from "@/src/lib/whatsapp/message-funnel";
 import { createWhatsAppAppLink, createWhatsAppWebLink, isMobileWhatsappEnvironment } from "@/src/lib/whatsapp/wa-link";
 import {
   copyWorkspaceMessage,
@@ -136,6 +136,7 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
   const company = getLeadCompany(lead);
   const city = lead.city || "sua cidade";
   const niche = lead.category || "seu nicho";
+  const operator = operatorName || "representante";
   const project = city ? `Projeto ${city}` : "Projeto PUB Start";
   const metadata = lead.metadata ?? {};
   const instagram =
@@ -149,7 +150,8 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
     .replace(/\{empresa\}|\{lead\}|\bEMPRESA\b|\bLEAD\b/g, company)
     .replace(/\{cidade\}|\bCIDADE\b/g, city)
     .replace(/\{nicho\}|\{copy\}|\bNICHO\b|\bCOPY\b/g, niche)
-    .replace(/\{operador\}/g, operatorName || "representante")
+    .replace(/\{intro_operador\}/g, getOperatorIntroPhrase(operator, template.length + lead.id.length))
+    .replace(/\{operador\}/g, operator)
     .replace(/\{telefone\}/g, lead.whatsapp || lead.phone || lead.phone_2 || "")
     .replace(/\{site\}/g, lead.website || "")
     .replace(/\{instagram\}/g, instagram)
@@ -160,7 +162,7 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
     .replace(/\s+([,.!?;:])/g, "$1")
     .trim();
 
-  return applyTimeAwareGreeting(rendered);
+  return applyTimeAwareGreeting(applyOperatorIntroPhrase(rendered, operator, template.length + lead.id.length));
 }
 
 async function parseJson<T>(response: Response) {
@@ -334,7 +336,10 @@ export function WhatsAppPageContent() {
     setMessage(renderLocalTemplate(activeStep.template, selectedLead, operatorName));
   }, [activeStep, operatorName, selectedLead]);
 
-  async function recordEvent(eventType: string, options: { advanceTo?: MessageFunnelStep | null; messageContent?: string | null } = {}) {
+  async function recordEvent(
+    eventType: string,
+    options: { advanceTo?: MessageFunnelStep | null; messageContent?: string | null; reloadState?: boolean } = {},
+  ) {
     if (!selectedLead || !activeStep || !selectedFunnel) {
       return;
     }
@@ -342,7 +347,7 @@ export function WhatsAppPageContent() {
     setIsActing(true);
 
     try {
-      await fetch(`/api/leads/${selectedLead.id}/message-events`, {
+      const payload = await fetch(`/api/leads/${selectedLead.id}/message-events`, {
         body: JSON.stringify({
           event_type: eventType,
           funnel_id: selectedFunnel.id,
@@ -353,6 +358,10 @@ export function WhatsAppPageContent() {
         headers: { "Content-Type": "application/json" },
         method: "POST",
       }).then((response) => parseJson<{ event: LeadMessageEvent }>(response));
+      if (options.reloadState === false) {
+        setEvents((current) => (payload.event ? [payload.event, ...current] : current));
+        return;
+      }
       await loadState(selectedLead.id);
     } catch (error) {
       toast({
@@ -372,7 +381,7 @@ export function WhatsAppPageContent() {
 
     try {
       await copyWorkspaceMessage(message);
-      await recordEvent("copied");
+      await recordEvent("copied", { reloadState: false });
       toast({ title: "Mensagem copiada", description: "Cole e envie manualmente no WhatsApp.", variant: "success" });
     } catch {
       toast({ title: "Não foi possível copiar", description: "Selecione o texto e copie manualmente.", variant: "error" });

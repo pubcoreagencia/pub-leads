@@ -97,7 +97,7 @@ const defaultSteps = [
     name: "Introdução",
     objective: "Se apresentar e pedir permissão para explicar.",
     template:
-      "Eu sou {operador}, representante comercial da Agência PUB. Estou entrando em contato porque a {empresa} foi uma das 5 empresas de {nicho} selecionadas para o nosso {projeto}. Posso te explicar rapidamente como funciona?",
+      "{intro_operador}, representante comercial da Agência PUB. Estou entrando em contato porque a {empresa} foi uma das 5 empresas de {nicho} selecionadas para o nosso {projeto}. Posso te explicar rapidamente como funciona?",
     wait_hint: "Usar depois que o lead responder ao primeiro contato.",
   },
   {

@@ -65,6 +65,164 @@ export function applyTimeAwareGreeting(text: string, date = new Date()) {
   );
 }
 
+function firstName(value: string) {
+  return value.trim().split(/\s+/)[0] ?? "";
+}
+
+function normalizeName(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function inferPortugueseNameArticle(name: string) {
+  const normalized = normalizeName(firstName(name));
+
+  const feminineNames = new Set([
+    "aline",
+    "amanda",
+    "ana",
+    "beatriz",
+    "bianca",
+    "bruna",
+    "camila",
+    "carla",
+    "carolina",
+    "clara",
+    "debora",
+    "fernanda",
+    "gabriela",
+    "helena",
+    "isabela",
+    "joana",
+    "julia",
+    "juliana",
+    "larissa",
+    "laura",
+    "leticia",
+    "luana",
+    "mariana",
+    "marina",
+    "maria",
+    "monica",
+    "patricia",
+    "paula",
+    "priscila",
+    "rafaela",
+    "renata",
+    "sofia",
+    "sophia",
+    "tatiana",
+    "valentina",
+    "vanessa",
+    "yasmin",
+  ]);
+  const masculineNames = new Set([
+    "andre",
+    "antonio",
+    "bernardo",
+    "bruno",
+    "caio",
+    "carlos",
+    "daniel",
+    "davi",
+    "diego",
+    "eduardo",
+    "enzo",
+    "felipe",
+    "francisco",
+    "gabriel",
+    "gustavo",
+    "henrique",
+    "joao",
+    "jose",
+    "leonardo",
+    "lucas",
+    "luis",
+    "luiz",
+    "marcelo",
+    "mateus",
+    "matheus",
+    "miguel",
+    "nicolas",
+    "paulo",
+    "pedro",
+    "rafael",
+    "ricardo",
+    "rodrigo",
+    "samuel",
+    "thiago",
+    "tiago",
+    "victor",
+    "vitor",
+  ]);
+
+  if (!normalized || normalized === "representante") {
+    return null;
+  }
+
+  if (feminineNames.has(normalized)) {
+    return "a";
+  }
+
+  if (masculineNames.has(normalized)) {
+    return "o";
+  }
+
+  if (normalized.endsWith("a")) {
+    return "a";
+  }
+
+  if (normalized.endsWith("o")) {
+    return "o";
+  }
+
+  return null;
+}
+
+function isGenericOperatorName(name: string) {
+  const normalized = normalizeName(name.trim());
+
+  return !normalized || normalized === "representante" || normalized === "representante comercial";
+}
+
+export function getOperatorNameWithArticle(name: string) {
+  const trimmed = name.trim();
+  const article = inferPortugueseNameArticle(trimmed);
+
+  return article ? `${article} ${trimmed}` : trimmed;
+}
+
+export function getOperatorIntroPhrase(name: string, seed = 0) {
+  const trimmed = name.trim() || "representante";
+
+  if (isGenericOperatorName(trimmed)) {
+    return "Eu sou representante";
+  }
+
+  const nameWithArticle = getOperatorNameWithArticle(trimmed);
+  const variants = [
+    `Eu sou ${nameWithArticle}`,
+    `Me chamo ${trimmed}`,
+    `Aqui é ${nameWithArticle}`,
+    `Meu nome é ${trimmed}`,
+  ];
+
+  return variants[Math.abs(seed) % variants.length];
+}
+
+export function applyOperatorIntroPhrase(text: string, operator: string, seed = 0) {
+  if (isGenericOperatorName(operator)) {
+    return text;
+  }
+
+  const intro = getOperatorIntroPhrase(operator, seed);
+  const escapedOperator = operator.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  return text.replace(new RegExp(`\\bEu sou\\s+${escapedOperator}\\b`, "gi"), intro);
+}
+
 function leadCompany(lead: Lead) {
   return lead.company || lead.business_name || lead.fantasy_name || lead.name || "sua empresa";
 }
@@ -114,6 +272,7 @@ export function renderFunnelMessage({ context, lead, template, user }: RenderFun
   message = replaceRegexTokens(message, [/\bCIDADE\b/g], city);
   message = replaceToken(message, ["{nicho}", "{copy}"], niche);
   message = replaceRegexTokens(message, [/\bNICHO\b/g, /\bCOPY\b/g], niche);
+  message = replaceToken(message, ["{intro_operador}"], getOperatorIntroPhrase(operator, hashText(`${lead.id}|${template}|${operator}`)));
   message = replaceToken(message, ["{operador}"], operator);
   message = replaceToken(message, ["{telefone}"], lead.whatsapp || lead.phone || lead.phone_2 || "");
   message = replaceToken(message, ["{site}"], lead.website || "");
@@ -122,6 +281,7 @@ export function renderFunnelMessage({ context, lead, template, user }: RenderFun
   message = replaceToken(message, ["{projeto}"], project);
 
   message = message.replace(/\{[a-zA-Z_]+\}/g, "");
+  message = applyOperatorIntroPhrase(message, operator, hashText(`${lead.id}|${template}|${operator}`));
 
   return cleanText(applyTimeAwareGreeting(message));
 }
@@ -147,18 +307,18 @@ const stepVariations: Record<number, string[]> = {
     "Oi! Tudo tranquilo?",
   ],
   2: [
-    "Eu sou {operador}, representante comercial da Agência PUB. A {empresa} entrou na lista das 5 empresas de {nicho} selecionadas para o {projeto}. Posso te explicar rapidinho?",
-    "Eu sou {operador}, da equipe comercial da Agência PUB. A {empresa} foi selecionada entre 5 empresas de {nicho} para o {projeto}. Posso explicar em poucas palavras?",
-    "Eu sou {operador}, representante comercial da Agência PUB. Estamos falando com a {empresa} porque vocês foram escolhidos entre 5 empresas de {nicho} para o {projeto}. Posso te contar como funciona?",
-    "Eu sou {operador}, da Agência PUB. A {empresa} entrou na primeira lista de empresas de {nicho} do {projeto}. Posso explicar a proposta em poucos minutos?",
-    "Eu sou {operador}, representante comercial da Agência PUB. A {empresa} foi uma das 5 empresas de {nicho} separadas para o {projeto}. Posso te contextualizar?",
-    "Eu sou {operador}, da Agência PUB. Estamos priorizando algumas empresas de {nicho} para o {projeto}, e a {empresa} entrou nessa lista. Posso explicar o motivo?",
-    "Eu sou {operador}, representante comercial da Agência PUB. A {empresa} apareceu entre as empresas de {nicho} selecionadas para o {projeto}. Posso te mostrar como funciona?",
-    "Eu sou {operador}, da Agência PUB. A {empresa} foi escolhida para receber uma proposta do {projeto}, voltada para empresas de {nicho}. Posso te explicar?",
-    "Eu sou {operador}, representante comercial da Agência PUB. Estamos falando com poucas empresas de {nicho} no {projeto}, e a {empresa} está entre elas. Posso resumir?",
-    "Eu sou {operador}, da Agência PUB. A {empresa} foi selecionada nessa etapa do {projeto} junto com poucas empresas de {nicho}. Posso explicar rapidamente?",
-    "Eu sou {operador}, representante comercial da Agência PUB. O contato é porque a {empresa} entrou na seleção de empresas de {nicho} para o {projeto}. Posso te passar o contexto?",
-    "Eu sou {operador}, da Agência PUB. A {empresa} foi indicada para o {projeto}, que está selecionando 5 empresas de {nicho}. Posso te contar a ideia?",
+    "{intro_operador}, representante comercial da Agência PUB. A {empresa} entrou na lista das 5 empresas de {nicho} selecionadas para o {projeto}. Posso te explicar rapidinho?",
+    "{intro_operador}, da equipe comercial da Agência PUB. A {empresa} foi selecionada entre 5 empresas de {nicho} para o {projeto}. Posso explicar em poucas palavras?",
+    "{intro_operador}, representante comercial da Agência PUB. Estamos falando com a {empresa} porque vocês foram escolhidos entre 5 empresas de {nicho} para o {projeto}. Posso te contar como funciona?",
+    "{intro_operador}, da Agência PUB. A {empresa} entrou na primeira lista de empresas de {nicho} do {projeto}. Posso explicar a proposta em poucos minutos?",
+    "{intro_operador}, representante comercial da Agência PUB. A {empresa} foi uma das 5 empresas de {nicho} separadas para o {projeto}. Posso te contextualizar?",
+    "{intro_operador}, da Agência PUB. Estamos priorizando algumas empresas de {nicho} para o {projeto}, e a {empresa} entrou nessa lista. Posso explicar o motivo?",
+    "{intro_operador}, representante comercial da Agência PUB. A {empresa} apareceu entre as empresas de {nicho} selecionadas para o {projeto}. Posso te mostrar como funciona?",
+    "{intro_operador}, da Agência PUB. A {empresa} foi escolhida para receber uma proposta do {projeto}, voltada para empresas de {nicho}. Posso te explicar?",
+    "{intro_operador}, representante comercial da Agência PUB. Estamos falando com poucas empresas de {nicho} no {projeto}, e a {empresa} está entre elas. Posso resumir?",
+    "{intro_operador}, da Agência PUB. A {empresa} foi selecionada nessa etapa do {projeto} junto com poucas empresas de {nicho}. Posso explicar rapidamente?",
+    "{intro_operador}, representante comercial da Agência PUB. O contato é porque a {empresa} entrou na seleção de empresas de {nicho} para o {projeto}. Posso te passar o contexto?",
+    "{intro_operador}, da Agência PUB. A {empresa} foi indicada para o {projeto}, que está selecionando 5 empresas de {nicho}. Posso te contar a ideia?",
   ],
   3: [
     "O projeto é para empresas já consolidadas que ainda podem ter uma presença digital mais profissional. A entrega inclui site, Instagram, Google Meu Negócio, e-mail corporativo e WhatsApp Business, tudo pronto em 3 a 7 dias.",
