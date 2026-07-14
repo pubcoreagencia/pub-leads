@@ -72,6 +72,8 @@ type FunnelPayload = { funnels: MessageFunnel[] };
 type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
 type DiversifyPayload = { message: string; error?: string };
 type ProfilePayload = { fullName: string };
+type LeadCapturePeriod = "all" | "today" | "last_7_days" | "last_30_days";
+type LeadQueueSort = "newest" | "oldest" | "name_asc" | "niche_asc";
 
 const funnelStatusLabels: Record<LeadFunnelState["status"], string> = {
   contacted: "Contato feito",
@@ -151,6 +153,37 @@ function getLeadSearchText(lead: Lead) {
   );
 }
 
+function getLeadCreatedTime(lead: Lead) {
+  const timestamp = new Date(lead.created_at).getTime();
+
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isLeadInCapturePeriod(lead: Lead, period: LeadCapturePeriod) {
+  if (period === "all") {
+    return true;
+  }
+
+  const createdAt = getLeadCreatedTime(lead);
+
+  if (!createdAt) {
+    return false;
+  }
+
+  const now = new Date();
+
+  if (period === "today") {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    return createdAt >= startOfToday;
+  }
+
+  const days = period === "last_7_days" ? 7 : 30;
+  const minTime = now.getTime() - days * 24 * 60 * 60 * 1000;
+
+  return createdAt >= minTime;
+}
+
 function isPendingApproachLead(lead: Lead) {
   return !["responded", "proposal", "won", "lost"].includes(lead.status);
 }
@@ -220,6 +253,9 @@ export function WhatsAppPageContent() {
   const [usesMobileWhatsappApp, setUsesMobileWhatsappApp] = useState(false);
   const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
+  const [leadCapturePeriod, setLeadCapturePeriod] = useState<LeadCapturePeriod>("all");
+  const [leadNicheFilter, setLeadNicheFilter] = useState("all");
+  const [leadQueueSort, setLeadQueueSort] = useState<LeadQueueSort>("newest");
   const [variantSeed, setVariantSeed] = useState(1);
   const [mobileTab, setMobileTab] = useState<"queue" | "funnel" | "message" | "action">("queue");
 
@@ -242,15 +278,57 @@ export function WhatsAppPageContent() {
         : pendingApproachLeads,
     [onlyEligibleLeads, pendingApproachLeads],
   );
-  const approachLeads = useMemo(() => {
-    const query = normalizeSearchText(leadSearchQuery);
+  const leadNicheOptions = useMemo(() => {
+    const names = new Map<string, string>();
 
-    if (!query) {
-      return baseApproachLeads;
+    for (const lead of baseApproachLeads) {
+      const category = lead.category?.trim();
+
+      if (category) {
+        names.set(normalizeSearchText(category), category);
+      }
     }
 
-    return baseApproachLeads.filter((lead) => getLeadSearchText(lead).includes(query));
-  }, [baseApproachLeads, leadSearchQuery]);
+    return Array.from(names.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [baseApproachLeads]);
+  const approachLeads = useMemo(() => {
+    const query = normalizeSearchText(leadSearchQuery);
+    const filtered = baseApproachLeads.filter((lead) => {
+      const matchesSearch = query ? getLeadSearchText(lead).includes(query) : true;
+      const matchesNiche =
+        leadNicheFilter === "all" ? true : normalizeSearchText(lead.category ?? "") === leadNicheFilter;
+      const matchesPeriod = isLeadInCapturePeriod(lead, leadCapturePeriod);
+
+      return matchesSearch && matchesNiche && matchesPeriod;
+    });
+
+    return [...filtered].sort((first, second) => {
+      if (leadQueueSort === "oldest") {
+        return getLeadCreatedTime(first) - getLeadCreatedTime(second);
+      }
+
+      if (leadQueueSort === "name_asc") {
+        return getLeadCompany(first).localeCompare(getLeadCompany(second), "pt-BR");
+      }
+
+      if (leadQueueSort === "niche_asc") {
+        return (first.category ?? "").localeCompare(second.category ?? "", "pt-BR");
+      }
+
+      return getLeadCreatedTime(second) - getLeadCreatedTime(first);
+    });
+  }, [baseApproachLeads, leadCapturePeriod, leadNicheFilter, leadQueueSort, leadSearchQuery]);
+  const hasLeadQueueFilters =
+    leadSearchQuery.trim().length > 0 ||
+    leadCapturePeriod !== "all" ||
+    leadNicheFilter !== "all" ||
+    leadQueueSort !== "newest";
+
+  useEffect(() => {
+    if (leadNicheFilter !== "all" && !leadNicheOptions.some((option) => normalizeSearchText(option) === leadNicheFilter)) {
+      setLeadNicheFilter("all");
+    }
+  }, [leadNicheFilter, leadNicheOptions]);
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;
@@ -608,7 +686,7 @@ export function WhatsAppPageContent() {
                 <CardTitle>Fila de leads</CardTitle>
                 <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
                   <span>
-                    {leadSearchQuery.trim()
+                    {hasLeadQueueFilters
                       ? `${approachLeads.length} de ${baseApproachLeads.length} leads`
                       : `${approachLeads.length} leads na fila`}
                   </span>
@@ -626,6 +704,55 @@ export function WhatsAppPageContent() {
                     value={leadSearchQuery}
                   />
                 </div>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <select
+                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => setLeadCapturePeriod(event.target.value as LeadCapturePeriod)}
+                    value={leadCapturePeriod}
+                  >
+                    <option value="all">Todas as datas</option>
+                    <option value="today">Capturados hoje</option>
+                    <option value="last_7_days">Últimos 7 dias</option>
+                    <option value="last_30_days">Últimos 30 dias</option>
+                  </select>
+                  <select
+                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => setLeadNicheFilter(event.target.value)}
+                    value={leadNicheFilter}
+                  >
+                    <option value="all">Todos os nichos</option>
+                    {leadNicheOptions.map((category) => (
+                      <option key={category} value={normalizeSearchText(category)}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => setLeadQueueSort(event.target.value as LeadQueueSort)}
+                    value={leadQueueSort}
+                  >
+                    <option value="newest">Mais recentes primeiro</option>
+                    <option value="oldest">Primeiros capturados</option>
+                    <option value="name_asc">Nome A-Z</option>
+                    <option value="niche_asc">Nicho A-Z</option>
+                  </select>
+                </div>
+                {hasLeadQueueFilters ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setLeadSearchQuery("");
+                      setLeadCapturePeriod("all");
+                      setLeadNicheFilter("all");
+                      setLeadQueueSort("newest");
+                    }}
+                    type="button"
+                    variant="outline"
+                  >
+                    Limpar filtros
+                  </Button>
+                ) : null}
               </CardHeader>
               <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
                 {approachLeads.length === 0 ? (
@@ -663,6 +790,7 @@ export function WhatsAppPageContent() {
                           <p className="mt-1 truncate text-xs text-slate-500">
                             {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
                           </p>
+                          <p className="mt-1 text-[11px] text-slate-400">Capturado em {formatDate(lead.created_at)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <span className="text-xs text-slate-400">{index + 1}</span>
