@@ -10,6 +10,7 @@ import {
   Instagram,
   Loader2,
   MessageCircle,
+  Search,
   Send,
   SkipForward,
   Sparkles,
@@ -20,6 +21,7 @@ import {
 import { MetricCard, PageHeader, StatusBadge } from "@/components/ops/page";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import type { Lead } from "@/schemas/lead";
 import { deleteLeads, fetchLeads } from "@/services/leads";
@@ -124,6 +126,29 @@ function getLeadCompany(lead: Lead | null) {
   return lead?.company || lead?.business_name || lead?.fantasy_name || lead?.name || "Lead";
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getLeadSearchText(lead: Lead) {
+  return normalizeSearchText(
+    [
+      lead.name,
+      lead.company,
+      lead.business_name,
+      lead.fantasy_name,
+      lead.city,
+      lead.category,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+}
+
 function isPendingApproachLead(lead: Lead) {
   return !["responded", "proposal", "won", "lost"].includes(lead.status);
 }
@@ -191,6 +216,7 @@ export function WhatsAppPageContent() {
   const [isDeletingLead, setIsDeletingLead] = useState(false);
   const [usesMobileWhatsappApp, setUsesMobileWhatsappApp] = useState(false);
   const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
+  const [leadSearchQuery, setLeadSearchQuery] = useState("");
   const [variantSeed, setVariantSeed] = useState(1);
   const [mobileTab, setMobileTab] = useState<"queue" | "funnel" | "message" | "action">("queue");
 
@@ -206,13 +232,22 @@ export function WhatsAppPageContent() {
     return selectedFunnel?.steps.find((step) => step.id === activeStepId) ?? selectedFunnel?.steps[0] ?? null;
   }, [activeStepId, selectedFunnel]);
   const pendingApproachLeads = useMemo(() => leads.filter(isPendingApproachLead), [leads]);
-  const approachLeads = useMemo(
+  const baseApproachLeads = useMemo(
     () =>
       onlyEligibleLeads
         ? pendingApproachLeads.filter((lead) => ["confirmed", "possible"].includes(getLeadQualification(lead).whatsapp_status))
         : pendingApproachLeads,
     [onlyEligibleLeads, pendingApproachLeads],
   );
+  const approachLeads = useMemo(() => {
+    const query = normalizeSearchText(leadSearchQuery);
+
+    if (!query) {
+      return baseApproachLeads;
+    }
+
+    return baseApproachLeads.filter((lead) => getLeadSearchText(lead).includes(query));
+  }, [baseApproachLeads, leadSearchQuery]);
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;
@@ -551,14 +586,32 @@ export function WhatsAppPageContent() {
               <CardHeader>
                 <CardTitle>Fila de leads</CardTitle>
                 <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
-                  <span>{approachLeads.length} leads na fila</span>
+                  <span>
+                    {leadSearchQuery.trim()
+                      ? `${approachLeads.length} de ${baseApproachLeads.length} leads`
+                      : `${approachLeads.length} leads na fila`}
+                  </span>
                   <label className="flex items-center gap-2 text-xs text-slate-600">
                     <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" />
                     Só WhatsApp
                   </label>
                 </div>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    className="pl-9"
+                    onChange={(event) => setLeadSearchQuery(event.target.value)}
+                    placeholder="Pesquisar lead por nome"
+                    value={leadSearchQuery}
+                  />
+                </div>
               </CardHeader>
               <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
+                {approachLeads.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
+                    Nenhum lead encontrado para essa busca.
+                  </div>
+                ) : null}
                 {approachLeads.map((lead, index) => {
                   const active = lead.id === leadId;
                   const hasPhone = Boolean(getLeadPhone(lead));
