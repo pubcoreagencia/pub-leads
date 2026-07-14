@@ -225,7 +225,7 @@ export function PipelinePageContent() {
           <div className="hidden min-w-0 md:block">
             <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
               <div className="max-w-full overflow-x-auto pb-3">
-                <div className="grid min-w-[1190px] grid-cols-[repeat(7,minmax(160px,1fr))] gap-3 2xl:min-w-0">
+                <div className="grid min-w-[1820px] grid-cols-[repeat(7,260px)] gap-3">
                   {pipelineColumns.map((column) => (
                     <PipelineColumn column={column} key={column.id} leads={leadsByStatus[column.id]} />
                   ))}

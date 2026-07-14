@@ -47,7 +47,7 @@ export function PipelineCard({ lead }: PipelineCardProps) {
   return (
     <article
       className={cn(
-        "group overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md",
+        "group min-h-[172px] shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-red-200 hover:shadow-md",
         isDragging && "z-20 scale-[0.98] opacity-60 shadow-lg ring-2 ring-red-200",
       )}
       ref={setNodeRef}

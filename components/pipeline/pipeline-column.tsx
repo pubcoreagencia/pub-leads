@@ -23,7 +23,7 @@ export function PipelineColumn({ column, leads }: PipelineColumnProps) {
   return (
     <section
       className={cn(
-        "flex h-[calc(100vh-310px)] min-h-[500px] flex-col overflow-hidden rounded-md border border-slate-200 bg-slate-50/80",
+        "flex h-[calc(100vh-310px)] min-h-[520px] flex-col overflow-hidden rounded-md border border-slate-200 bg-slate-50/80",
         isOver && "border-red-300 bg-red-50 ring-2 ring-red-100",
       )}
       ref={setNodeRef}
@@ -38,7 +38,7 @@ export function PipelineColumn({ column, leads }: PipelineColumnProps) {
         <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{column.description}</p>
       </div>
 
-      <div className="grid flex-1 content-start gap-2 overflow-y-auto p-2.5">
+      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-2.5">
         {leads.length === 0 ? (
           <div className="rounded-md border border-dashed border-slate-300 bg-white/70 p-4 text-center text-xs leading-5 text-slate-500">
             Arraste um lead para esta etapa quando houver avanço comercial.
