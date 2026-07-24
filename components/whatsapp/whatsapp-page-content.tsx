@@ -70,7 +70,7 @@ type LeadMessageEvent = {
 
 type FunnelPayload = { funnels: MessageFunnel[] };
 type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
-type DiversifyPayload = { message: string; error?: string };
+type DiversifyPayload = { message: string; error?: string; diversificationScore?: number };
 type ProfilePayload = { fullName: string };
 type LeadCapturePeriod = "all" | "today" | "last_7_days" | "last_30_days";
 type LeadQueueSort = "newest" | "oldest" | "name_asc" | "niche_asc";
@@ -244,6 +244,7 @@ export function WhatsAppPageContent() {
   const [state, setState] = useState<LeadFunnelState | null>(null);
   const [events, setEvents] = useState<LeadMessageEvent[]>([]);
   const [activeStepId, setActiveStepId] = useState("");
+  const [baseCopy, setBaseCopy] = useState("");
   const [message, setMessage] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -445,11 +446,14 @@ export function WhatsAppPageContent() {
 
   useEffect(() => {
     if (!activeStep || !selectedLead) {
+      setBaseCopy("");
       setMessage("");
       return;
     }
 
-    setMessage(renderLocalTemplate(activeStep.template, selectedLead, operatorName));
+    const renderedTemplate = renderLocalTemplate(activeStep.template, selectedLead, operatorName);
+    setBaseCopy(renderedTemplate);
+    setMessage(renderedTemplate);
   }, [activeStep, operatorName, selectedLead]);
 
   async function recordEvent(
@@ -523,18 +527,29 @@ export function WhatsAppPageContent() {
   }
 
   async function handleDiversifyStep() {
-    if (!selectedLead || !activeStep || !selectedFunnel) {
+    if (!selectedLead) {
+      return;
+    }
+
+    if (baseCopy.trim().length < 10) {
+      toast({
+        title: "Copy base muito curta",
+        description: "Cole uma copy base com mais contexto antes de diversificar.",
+        variant: "error",
+      });
       return;
     }
 
     setIsActing(true);
 
     try {
-      const payload = await fetch("/api/whatsapp/funnel-message/diversify", {
+      const payload = await fetch("/api/whatsapp/diversify-message", {
         body: JSON.stringify({
-          funnelId: selectedFunnel.id,
+          baseCopy,
+          city: selectedLead.city ?? "",
           leadId: selectedLead.id,
-          stepId: activeStep.id,
+          mode: "same_strength",
+          niche: selectedLead.category ?? "",
           variantSeed,
         }),
         headers: { "Content-Type": "application/json" },
@@ -880,9 +895,9 @@ export function WhatsAppPageContent() {
             <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
               <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
                 <CardHeader>
-                  <CardTitle>Mensagem sugerida</CardTitle>
+                  <CardTitle>Copy para WhatsApp</CardTitle>
                   <p className="text-sm leading-6 text-slate-500">
-                    {activeStep ? `Passo ${activeStep.step_order} — ${activeStep.name}` : "Selecione um passo do funil."}
+                    {activeStep ? `Base do passo ${activeStep.step_order} — ${activeStep.name}` : "Selecione um passo do funil."}
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -893,18 +908,33 @@ export function WhatsAppPageContent() {
                     </p>
                     <p className="mt-1 text-xs">{state ? funnelStatusLabels[state.status] : "Não iniciado"}</p>
                   </div>
-                  <textarea
-                    className="min-h-44 w-full rounded-md border border-input bg-white p-4 text-sm leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 xl:min-h-52"
-                    onChange={(event) => setMessage(event.target.value)}
-                    value={message}
-                  />
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Copy base
+                    <textarea
+                      className="min-h-40 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                      onChange={(event) => {
+                        setBaseCopy(event.target.value);
+                        setMessage(event.target.value);
+                      }}
+                      placeholder="Cole aqui a copy que deve ser diversificada"
+                      value={baseCopy}
+                    />
+                  </label>
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Mensagem diversificada
+                    <textarea
+                      className="min-h-44 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 xl:min-h-52"
+                      onChange={(event) => setMessage(event.target.value)}
+                      value={message}
+                    />
+                  </label>
                   {activeStep?.wait_hint ? (
                     <p className="text-xs leading-5 text-slate-500">{activeStep.wait_hint}</p>
                   ) : null}
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button disabled={isActing || !activeStep} onClick={handleDiversifyStep} type="button" variant="outline">
+                    <Button disabled={isActing || !selectedLead || baseCopy.trim().length < 10} onClick={handleDiversifyStep} type="button" variant="outline">
                       <Sparkles className="h-4 w-4" />
-                      Variar mensagem
+                      Diversificar copy
                     </Button>
                     <Button disabled={!message || isActing} onClick={handleCopyMessage} type="button">
                       <Clipboard className="h-4 w-4" />

@@ -13,7 +13,7 @@ const diversifyMessageSchema = z.object({
   city: z.string().trim().max(120).optional().default(""),
   copyBase: z.string().trim().min(10).max(5000).optional(),
   leadId: z.string().uuid(),
-  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short"]).optional().default("short_whatsapp"),
+  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short", "same_strength"]).optional().default("short_whatsapp"),
   niche: z.string().trim().max(120).optional().default(""),
   variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
 }).refine((data) => data.baseCopy || data.copyBase, {

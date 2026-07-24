@@ -1,6 +1,6 @@
 import type { Lead } from "@/schemas/lead";
 
-export type DiversificationMode = "short_whatsapp" | "balanced" | "high_variation" | "ultra_short";
+export type DiversificationMode = "short_whatsapp" | "balanced" | "high_variation" | "ultra_short" | "same_strength";
 
 export type DiversifyBaseCopyInput = {
   baseCopy?: string;
@@ -176,6 +176,161 @@ function hashText(value: string) {
 
 function pick<T>(items: T[], seed: number, offset = 0) {
   return items[(seed + offset) % items.length];
+}
+
+function preserveLeadingCase(original: string, replacement: string) {
+  if (!original[0] || original[0] !== original[0].toUpperCase()) {
+    return replacement;
+  }
+
+  return `${replacement.charAt(0).toUpperCase()}${replacement.slice(1)}`;
+}
+
+function replaceOnceWithVariant(text: string, pattern: RegExp, variants: string[], seed: number, offset: number) {
+  let changed = false;
+  const next = text.replace(pattern, (match) => {
+    if (changed) {
+      return match;
+    }
+
+    changed = true;
+    return preserveLeadingCase(match, pick(variants, seed, offset));
+  });
+
+  return {
+    changed,
+    text: next,
+  };
+}
+
+const sameStrengthSwaps: Array<{ label: string; pattern: RegExp; variants: string[] }> = [
+  {
+    label: "greeting_variation",
+    pattern: /\bolá,\s*tudo bem\?/i,
+    variants: ["Oi, tudo bem?", "Olá, tudo certo?", "Oi! Tudo bem por aí?"],
+  },
+  {
+    label: "greeting_variation",
+    pattern: /\boi,\s*tudo bem\?/i,
+    variants: ["Olá, tudo bem?", "Oi, tudo certo?", "Oi! Tudo bem por aí?"],
+  },
+  {
+    label: "contact_phrase_variation",
+    pattern: /\bestou entrando em contato\b/i,
+    variants: ["entrei em contato", "estou te chamando", "estou falando com vocês"],
+  },
+  {
+    label: "contact_phrase_variation",
+    pattern: /\bestamos entrando em contato\b/i,
+    variants: ["entramos em contato", "estamos falando com vocês", "estamos chamando vocês"],
+  },
+  {
+    label: "selection_phrase_variation",
+    pattern: /\bfoi selecionada\b/i,
+    variants: ["foi escolhida", "entrou na seleção", "foi separada"],
+  },
+  {
+    label: "selection_phrase_variation",
+    pattern: /\bselecionamos\b/i,
+    variants: ["separamos", "escolhemos", "colocamos na seleção"],
+  },
+  {
+    label: "opportunity_phrase_variation",
+    pattern: /\bgrande potencial\b/i,
+    variants: ["potencial claro", "bom potencial", "potencial forte"],
+  },
+  {
+    label: "connective_variation",
+    pattern: /\bcaso faça sentido\b/i,
+    variants: ["se fizer sentido", "caso faça sentido para vocês", "se isso fizer sentido"],
+  },
+  {
+    label: "cta_variation",
+    pattern: /\bposso te enviar mais detalhes\?/i,
+    variants: ["quer que eu te envie mais detalhes?", "posso te mandar mais detalhes?", "quer que eu te passe mais detalhes?"],
+  },
+  {
+    label: "cta_variation",
+    pattern: /\bposso te explicar rapidamente\?/i,
+    variants: ["posso te explicar em poucos minutos?", "posso te mostrar rapidamente?", "posso te contextualizar rapidinho?"],
+  },
+  {
+    label: "cta_variation",
+    pattern: /\bposso te explicar\b/i,
+    variants: ["posso te mostrar", "posso te contextualizar", "posso te explicar melhor"],
+  },
+  {
+    label: "closing_variation",
+    pattern: /\bfico à disposição\b/i,
+    variants: ["sigo à disposição", "fico por aqui", "sigo por aqui"],
+  },
+];
+
+function addSafeLineBreak(text: string) {
+  if (text.includes("\n\n")) {
+    return text;
+  }
+
+  return text.replace(/([.!?])\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/u, "$1\n\n$2");
+}
+
+function addFallbackLineBreak(text: string) {
+  if (text.includes("\n")) {
+    return text;
+  }
+
+  const target = Math.floor(text.length * 0.55);
+  const breakIndex = text.indexOf(" ", target);
+
+  if (breakIndex < 0) {
+    return text;
+  }
+
+  return `${text.slice(0, breakIndex)}\n${text.slice(breakIndex + 1)}`;
+}
+
+function buildSameStrengthMessage(original: string, seed: number) {
+  let message = original;
+  const applied = ["placeholder_replacement", "same_strength_mode"];
+  const maxSwaps = original.length > 500 ? 5 : 3;
+  let swaps = 0;
+
+  for (const [index, swap] of sameStrengthSwaps.entries()) {
+    if (swaps >= maxSwaps) {
+      break;
+    }
+
+    if ((seed + index) % 3 === 1) {
+      continue;
+    }
+
+    const result = replaceOnceWithVariant(message, swap.pattern, swap.variants, seed, index);
+
+    if (result.changed) {
+      message = result.text;
+      swaps += 1;
+      applied.push(swap.label);
+    }
+  }
+
+  if (normalizeForCompare(message) === normalizeForCompare(original) && original.length > 80) {
+    const withBreak = addSafeLineBreak(message);
+
+    if (withBreak !== message) {
+      message = withBreak;
+      applied.push("line_break_variation");
+    }
+  }
+
+  if (message === original && original.length > 80) {
+    message = addFallbackLineBreak(message);
+    applied.push("line_break_fallback");
+  }
+
+  return {
+    applied,
+    message: cleanInlineText(message),
+  };
 }
 
 function leadCompany(lead: Lead | undefined, explicitLeadName?: string | null) {
@@ -639,7 +794,9 @@ export function diversifyBaseCopyWithReport(input: DiversifyBaseCopyInput): Dive
     placeholderResult.city,
     placeholderResult.niche,
   );
-  let result = buildCompactMessage(blocks, seed, mode);
+  let result = mode === "same_strength"
+    ? buildSameStrengthMessage(placeholderResult.text, seed)
+    : buildCompactMessage(blocks, seed, mode);
   let preservedTriggers = getProtectedTriggers(blocks, result.message);
   let provisionalStats = {
     finalLength: result.message.length,
@@ -651,7 +808,7 @@ export function diversifyBaseCopyWithReport(input: DiversifyBaseCopyInput): Dive
     transformationsApplied: result.applied.length,
   };
 
-  if (shouldFallback(placeholderResult.text, result.message, provisionalStats)) {
+  if (mode !== "same_strength" && shouldFallback(placeholderResult.text, result.message, provisionalStats)) {
     result = {
       applied: [...result.applied, "compact_fallback"],
       message: buildAggressiveFallback(blocks, seed),
