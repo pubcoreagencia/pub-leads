@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTursoUnavailableMessage, hasTursoConfig } from "@/src/lib/turso/client";
 import {
   createMessageFunnelFromBaseCopy,
+  deleteMessageFunnel,
   listMessageFunnels,
   updateMessageFunnelFromBaseCopy,
 } from "@/src/lib/turso/message-funnels-repository";
@@ -15,6 +16,10 @@ const createFunnelSchema = z.object({
 });
 
 const updateFunnelSchema = createFunnelSchema.extend({
+  id: z.string().trim().min(1),
+});
+
+const deleteFunnelSchema = z.object({
   id: z.string().trim().min(1),
 });
 
@@ -94,6 +99,35 @@ export async function PATCH(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Nao foi possivel editar a copy." },
+      { status: 400 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!hasTursoConfig()) {
+    return NextResponse.json({ error: getTursoUnavailableMessage() }, { status: 503 });
+  }
+
+  const userId = await getUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  const parsed = deleteFunnelSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
+  }
+
+  try {
+    const funnels = await deleteMessageFunnel(userId, parsed.data.id);
+
+    return NextResponse.json({ funnels });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Nao foi possivel apagar a copy." },
       { status: 400 },
     );
   }

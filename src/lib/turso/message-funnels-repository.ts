@@ -239,6 +239,10 @@ const defaultBaseCopy = defaultSteps.map((step) => step.template).join("\n\n");
 
 let ensured = false;
 
+function initialCopyId(userId: string) {
+  return `pub-start-initial-${userId}`;
+}
+
 function parseJson(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {
     return {};
@@ -407,37 +411,40 @@ export async function ensureMessageFunnelSchema() {
   await executeSchema("create index if not exists message_funnel_steps_funnel_idx on message_funnel_steps(funnel_id, step_order)");
   await executeSchema("create unique index if not exists lead_funnel_states_user_lead_unique_idx on lead_funnel_states(user_id, lead_id)");
   await executeSchema("create index if not exists lead_message_events_user_lead_idx on lead_message_events(user_id, lead_id, created_at)");
-  await seedDefaultFunnel();
   ensured = true;
 }
 
-async function seedDefaultFunnel() {
+async function ensureInitialUserCopy(userId: string) {
+  const existingUserCopy = await getTursoClient().execute({
+    args: [userId],
+    sql: "select id from message_funnels where user_id = ? and metadata like '%legacy_initial_copy%' limit 1",
+  });
+
+  if (existingUserCopy.rows[0]) {
+    return;
+  }
+
   const now = new Date().toISOString();
+  const funnelId = initialCopyId(userId);
 
   await getTursoClient().execute({
     args: [
-      DEFAULT_FUNNEL_ID,
+      funnelId,
+      userId,
       "Funil PUB Start",
       "Roteiro padrão de abordagem comercial manual da Agência PUB.",
       JSON.stringify({
         base_copy: defaultBaseCopy,
-        source: "system_default",
+        source: "legacy_initial_copy",
         step_count: defaultSteps.length,
-        version: 2,
+        version: 1,
       }),
       now,
       now,
     ],
     sql: `
       insert into message_funnels (id, user_id, name, description, is_default, is_active, metadata, created_at, updated_at)
-      values (?, null, ?, ?, 1, 1, ?, ?, ?)
-      on conflict(id) do update set
-        name = excluded.name,
-        description = excluded.description,
-        is_default = 1,
-        is_active = 1,
-        metadata = excluded.metadata,
-        updated_at = excluded.updated_at
+      values (?, ?, ?, ?, 0, 1, ?, ?, ?)
     `,
   });
 
@@ -446,8 +453,9 @@ async function seedDefaultFunnel() {
 
     await getTursoClient().execute({
       args: [
-        `${DEFAULT_FUNNEL_ID}-step-${order}`,
-        DEFAULT_FUNNEL_ID,
+        `${funnelId}-step-${order}`,
+        funnelId,
+        userId,
         order,
         step.name,
         step.objective,
@@ -461,14 +469,7 @@ async function seedDefaultFunnel() {
         insert into message_funnel_steps (
           id, funnel_id, user_id, step_order, name, objective, template, wait_hint, metadata, created_at, updated_at
         )
-        values (?, ?, null, ?, ?, ?, ?, ?, ?, ?, ?)
-        on conflict(id) do update set
-          name = excluded.name,
-          objective = excluded.objective,
-          template = excluded.template,
-          wait_hint = excluded.wait_hint,
-          is_active = 1,
-          updated_at = excluded.updated_at
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
     });
   }
@@ -476,14 +477,15 @@ async function seedDefaultFunnel() {
 
 export async function listMessageFunnels(userId: string) {
   await ensureMessageFunnelSchema();
+  await ensureInitialUserCopy(userId);
 
   const funnelsResult = await getTursoClient().execute({
     args: [userId],
-    sql: "select * from message_funnels where is_active = 1 and (user_id is null or user_id = ?) order by is_default desc, datetime(created_at) asc",
+    sql: "select * from message_funnels where is_active = 1 and user_id = ? order by datetime(created_at) asc",
   });
   const stepsResult = await getTursoClient().execute({
     args: [userId],
-    sql: "select * from message_funnel_steps where is_active = 1 and (user_id is null or user_id = ?) order by step_order asc",
+    sql: "select * from message_funnel_steps where is_active = 1 and user_id = ? order by step_order asc",
   });
   const steps = stepsResult.rows.map(rowToStep);
 
@@ -658,6 +660,44 @@ export async function updateMessageFunnelFromBaseCopy(
   return updated;
 }
 
+export async function deleteMessageFunnel(userId: string, funnelId: string) {
+  await ensureMessageFunnelSchema();
+
+  const existing = await getTursoClient().execute({
+    args: [userId, funnelId],
+    sql: "select id from message_funnels where user_id = ? and id = ? and is_active = 1 limit 1",
+  });
+
+  if (!existing.rows[0]) {
+    throw new Error("Copy nao encontrada.");
+  }
+
+  await getTursoClient().execute({
+    args: [userId, funnelId],
+    sql: "update message_funnels set is_active = 0, updated_at = current_timestamp where user_id = ? and id = ?",
+  });
+  await getTursoClient().execute({
+    args: [userId, funnelId],
+    sql: "update message_funnel_steps set is_active = 0, updated_at = current_timestamp where user_id = ? and funnel_id = ?",
+  });
+
+  const remainingFunnels = await listMessageFunnels(userId);
+  const fallbackFunnel = remainingFunnels[0] ?? null;
+
+  if (fallbackFunnel) {
+    await getTursoClient().execute({
+      args: [fallbackFunnel.id, fallbackFunnel.steps[0]?.id ?? null, fallbackFunnel.steps[0]?.step_order ?? 1, userId, funnelId],
+      sql: `
+        update lead_funnel_states
+        set funnel_id = ?, current_step_id = ?, current_step_order = ?, updated_at = current_timestamp
+        where user_id = ? and funnel_id = ?
+      `,
+    });
+  }
+
+  return remainingFunnels;
+}
+
 export async function getOrCreateLeadFunnelState(userId: string, leadId: string, funnelId = DEFAULT_FUNNEL_ID) {
   await ensureMessageFunnelSchema();
 
@@ -668,6 +708,7 @@ export async function getOrCreateLeadFunnelState(userId: string, leadId: string,
   }
 
   const funnel = await getMessageFunnel(userId, funnelId);
+  const resolvedFunnelId = funnel?.id ?? funnelId;
   const firstStep = funnel?.steps[0] ?? null;
   const existing = await getTursoClient().execute({
     args: [userId, leadId],
@@ -686,7 +727,7 @@ export async function getOrCreateLeadFunnelState(userId: string, leadId: string,
       id,
       userId,
       leadId,
-      funnelId,
+      resolvedFunnelId,
       firstStep?.id ?? null,
       firstStep?.step_order ?? 1,
       "not_started",

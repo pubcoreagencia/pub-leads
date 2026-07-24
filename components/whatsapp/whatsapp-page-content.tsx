@@ -337,7 +337,8 @@ export function WhatsAppPageContent() {
   const activeStep = useMemo(() => {
     return selectedFunnel?.steps.find((step) => step.id === activeStepId) ?? selectedFunnel?.steps[0] ?? null;
   }, [activeStepId, selectedFunnel]);
-  const canEditSelectedCopy = Boolean(selectedFunnel && !selectedFunnel.is_default);
+  const canEditSelectedCopy = Boolean(selectedFunnel);
+  const canDeleteSelectedCopy = Boolean(selectedFunnel);
   const pendingApproachLeads = useMemo(() => leads.filter(isPendingApproachLead), [leads]);
   const baseApproachLeads = useMemo(
     () =>
@@ -664,10 +665,10 @@ export function WhatsAppPageContent() {
   }
 
   function handleStartEditCopy() {
-    if (!selectedFunnel || selectedFunnel.is_default) {
+    if (!selectedFunnel) {
       toast({
-        title: "Copy padrao protegida",
-        description: "Crie uma nova copy para personalizar o roteiro padrao.",
+        title: "Nenhuma copy selecionada",
+        description: "Selecione uma copy antes de editar.",
         variant: "error",
       });
       return;
@@ -733,10 +734,10 @@ export function WhatsAppPageContent() {
     const name = copyFunnelName.trim();
     const baseCopyValue = fullBaseCopy.trim();
 
-    if (!selectedFunnel || selectedFunnel.is_default) {
+    if (!selectedFunnel) {
       toast({
-        title: "Copy padrao protegida",
-        description: "Crie uma nova copy para personalizar o roteiro padrao.",
+        title: "Nenhuma copy selecionada",
+        description: "Selecione uma copy antes de salvar alteracoes.",
         variant: "error",
       });
       return;
@@ -774,6 +775,52 @@ export function WhatsAppPageContent() {
     } catch (error) {
       toast({
         title: "Erro ao editar copy",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsSavingCopyFunnel(false);
+    }
+  }
+
+  async function handleDeleteCopyFunnel() {
+    if (!selectedFunnel) {
+      toast({
+        title: "Nenhuma copy selecionada",
+        description: "Selecione uma copy antes de apagar.",
+        variant: "error",
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(`Apagar a copy "${selectedFunnel.name}"? Essa acao nao pode ser desfeita.`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSavingCopyFunnel(true);
+
+    try {
+      const payload = await fetch("/api/message-funnels", {
+        body: JSON.stringify({ id: selectedFunnel.id }),
+        headers: { "Content-Type": "application/json" },
+        method: "DELETE",
+      }).then((response) => parseJson<FunnelPayload>(response));
+      const nextFunnel = payload.funnels[0] ?? null;
+
+      setFunnels(payload.funnels);
+      setFunnelId(nextFunnel?.id ?? "");
+      setActiveStepId(nextFunnel?.steps[0]?.id ?? "");
+      setCopyFormMode("view");
+      setCopyFunnelName(nextFunnel?.name ?? "");
+      setFullBaseCopy(getFunnelBaseCopy(nextFunnel));
+      setVariantSeed(1);
+      setMobileTab(nextFunnel ? "funnel" : "copies");
+      toast({ title: "Copy apagada", description: "A copy foi removida da lista.", variant: "success" });
+    } catch (error) {
+      toast({
+        title: "Erro ao apagar copy",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
@@ -879,7 +926,7 @@ export function WhatsAppPageContent() {
           <Loader2 className="h-4 w-4 animate-spin text-red-600" />
           Carregando funil de abordagem...
         </div>
-      ) : pendingApproachLeads.length === 0 || !selectedFunnel ? (
+      ) : pendingApproachLeads.length === 0 ? (
         <div className="flex min-h-72 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center">
           <MessageCircle className="mb-4 h-7 w-7 text-red-600" />
           <h2 className="text-lg font-semibold text-slate-950">Nenhum lead pendente de abordagem</h2>
@@ -887,6 +934,42 @@ export function WhatsAppPageContent() {
             Salve novos leads na Prospecção ou revise a aba Leads. O lead só sai da abordagem quando avançar para uma etapa acima de Contatado.
           </p>
         </div>
+      ) : !selectedFunnel ? (
+        <Card className="border-slate-200 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle>Nenhuma copy cadastrada</CardTitle>
+            <p className="text-sm leading-6 text-slate-500">
+              Crie uma copy para separar automaticamente em etapas e iniciar a abordagem dos leads.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Nome da copy
+              <Input
+                onChange={(event) => setCopyFunnelName(event.target.value)}
+                placeholder="Ex: PUB Start - clinicas"
+                value={copyFunnelName}
+              />
+            </label>
+            <label className="grid gap-2 text-sm font-medium text-slate-700">
+              Copy base inteira
+              <textarea
+                className="min-h-52 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                onChange={(event) => setFullBaseCopy(event.target.value)}
+                placeholder="Cole a sequencia completa aqui. Separe os passos por linhas em branco."
+                value={fullBaseCopy}
+              />
+            </label>
+            <Button
+              disabled={isSavingCopyFunnel || copyFunnelName.trim().length < 2 || fullBaseCopy.trim().length < 10}
+              onClick={handleCreateCopyFunnel}
+              type="button"
+            >
+              {isSavingCopyFunnel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Salvar nova copy
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <>
           <div className="grid grid-cols-5 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
@@ -1087,7 +1170,7 @@ export function WhatsAppPageContent() {
                     ))}
                   </select>
                 </label>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-3">
                   <Button onClick={handleStartCreateCopy} type="button">
                     <Sparkles className="h-4 w-4" />
                     Criar nova copy
@@ -1095,22 +1178,27 @@ export function WhatsAppPageContent() {
                   <Button
                     disabled={!canEditSelectedCopy}
                     onClick={handleStartEditCopy}
-                    title={canEditSelectedCopy ? "Editar a copy selecionada" : "A copy padrao do sistema nao pode ser editada"}
+                    title={canEditSelectedCopy ? "Editar a copy selecionada" : "Selecione uma copy para editar"}
                     type="button"
                     variant="outline"
                   >
                     Editar copy
+                  </Button>
+                  <Button
+                    disabled={!canDeleteSelectedCopy || isSavingCopyFunnel}
+                    onClick={handleDeleteCopyFunnel}
+                    title={canDeleteSelectedCopy ? "Apagar a copy selecionada" : "Selecione uma copy para apagar"}
+                    type="button"
+                    variant="outline"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Apagar copy
                   </Button>
                 </div>
                 {copyFormMode === "view" ? (
                   <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
                     Selecione uma copy para usar no funil. Para mudar o conteudo, clique em Editar copy; para cadastrar outra,
                     clique em Criar nova copy.
-                  </p>
-                ) : null}
-                {selectedFunnel?.is_default ? (
-                  <p className="rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
-                    Esta e a copy padrao do sistema. Use Criar nova copy para personalizar sem alterar o roteiro base.
                   </p>
                 ) : null}
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
