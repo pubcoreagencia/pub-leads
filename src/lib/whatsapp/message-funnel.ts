@@ -249,12 +249,14 @@ function instagramValue(lead: Lead) {
   return handle ? `@${handle.replace(/^@/, "")}` : url;
 }
 
-function replaceToken(text: string, tokens: string[], value: string) {
-  return tokens.reduce((current, token) => current.replaceAll(token, value), text);
-}
+function replaceTemplateValue(text: string, names: string[], value: string) {
+  return names.reduce((current, name) => {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const wrappedPattern = new RegExp(`\\{${escapedName}\\}|\\[${escapedName}\\]`, "gi");
+    const uppercasePattern = new RegExp(`\\b${escapedName.toUpperCase()}\\b`, "g");
 
-function replaceRegexTokens(text: string, patterns: RegExp[], value: string) {
-  return patterns.reduce((current, pattern) => current.replace(pattern, value), text);
+    return current.replace(wrappedPattern, value).replace(uppercasePattern, value);
+  }, text);
 }
 
 export function renderFunnelMessage({ context, lead, template, user }: RenderFunnelMessageInput) {
@@ -266,19 +268,16 @@ export function renderFunnelMessage({ context, lead, template, user }: RenderFun
 
   let message = template;
 
-  message = replaceToken(message, ["{empresa}", "{lead}"], company);
-  message = replaceRegexTokens(message, [/\bEMPRESA\b/g, /\bLEAD\b/g], company);
-  message = replaceToken(message, ["{cidade}"], city);
-  message = replaceRegexTokens(message, [/\bCIDADE\b/g], city);
-  message = replaceToken(message, ["{nicho}", "{copy}"], niche);
-  message = replaceRegexTokens(message, [/\bNICHO\b/g, /\bCOPY\b/g], niche);
-  message = replaceToken(message, ["{intro_operador}"], getOperatorIntroPhrase(operator, hashText(`${lead.id}|${template}|${operator}`)));
-  message = replaceToken(message, ["{operador}"], operator);
-  message = replaceToken(message, ["{telefone}"], lead.whatsapp || lead.phone || lead.phone_2 || "");
-  message = replaceToken(message, ["{site}"], lead.website || "");
-  message = replaceToken(message, ["{instagram}"], instagramValue(lead));
-  message = replaceToken(message, ["{plano}"], context?.plan || "");
-  message = replaceToken(message, ["{projeto}"], project);
+  message = replaceTemplateValue(message, ["intro_operador"], getOperatorIntroPhrase(operator, hashText(`${lead.id}|${template}|${operator}`)));
+  message = replaceTemplateValue(message, ["nome", "operador"], operator);
+  message = replaceTemplateValue(message, ["empresa", "lead"], company);
+  message = replaceTemplateValue(message, ["cidade"], city);
+  message = replaceTemplateValue(message, ["nicho", "copy", "categoria"], niche);
+  message = replaceTemplateValue(message, ["telefone"], lead.whatsapp || lead.phone || lead.phone_2 || "");
+  message = replaceTemplateValue(message, ["site"], lead.website || "");
+  message = replaceTemplateValue(message, ["instagram"], instagramValue(lead));
+  message = replaceTemplateValue(message, ["plano"], context?.plan || "");
+  message = replaceTemplateValue(message, ["projeto"], project);
 
   message = message.replace(/\{[a-zA-Z_]+\}/g, "");
   message = applyOperatorIntroPhrase(message, operator, hashText(`${lead.id}|${template}|${operator}`));

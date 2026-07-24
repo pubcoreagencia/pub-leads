@@ -190,6 +190,16 @@ function isPendingApproachLead(lead: Lead) {
   return !["responded", "proposal", "won", "lost"].includes(lead.status);
 }
 
+function replaceTemplateValue(text: string, names: string[], value: string) {
+  return names.reduce((current, name) => {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const wrappedPattern = new RegExp(`\\{${escapedName}\\}|\\[${escapedName}\\]`, "gi");
+    const uppercasePattern = new RegExp(`\\b${escapedName.toUpperCase()}\\b`, "g");
+
+    return current.replace(wrappedPattern, value).replace(uppercasePattern, value);
+  }, text);
+}
+
 function renderLocalTemplate(template: string, lead: Lead | null, operatorName: string) {
   if (!lead) {
     return "";
@@ -208,17 +218,47 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
         ? metadata.instagram_url
         : "";
 
-  const rendered = template
-    .replace(/\{empresa\}|\{lead\}|\bEMPRESA\b|\bLEAD\b/g, company)
-    .replace(/\{cidade\}|\bCIDADE\b/g, city)
-    .replace(/\{nicho\}|\{copy\}|\bNICHO\b|\bCOPY\b/g, niche)
-    .replace(/\{intro_operador\}/g, getOperatorIntroPhrase(operator, template.length + lead.id.length))
-    .replace(/\{operador\}/g, operator)
-    .replace(/\{telefone\}/g, lead.whatsapp || lead.phone || lead.phone_2 || "")
-    .replace(/\{site\}/g, lead.website || "")
-    .replace(/\{instagram\}/g, instagram)
-    .replace(/\{plano\}/g, "")
-    .replace(/\{projeto\}/g, project)
+  const rendered = replaceTemplateValue(
+    replaceTemplateValue(
+      replaceTemplateValue(
+        replaceTemplateValue(
+          replaceTemplateValue(
+            replaceTemplateValue(
+              replaceTemplateValue(
+                replaceTemplateValue(
+                  replaceTemplateValue(
+                    replaceTemplateValue(
+                      template,
+                      ["intro_operador"],
+                      getOperatorIntroPhrase(operator, template.length + lead.id.length),
+                    ),
+                    ["nome", "operador"],
+                    operator,
+                  ),
+                  ["empresa", "lead"],
+                  company,
+                ),
+                ["cidade"],
+                city,
+              ),
+              ["nicho", "copy", "categoria"],
+              niche,
+            ),
+            ["telefone"],
+            lead.whatsapp || lead.phone || lead.phone_2 || "",
+          ),
+          ["site"],
+          lead.website || "",
+        ),
+        ["instagram"],
+        instagram,
+      ),
+      ["plano"],
+      "",
+    ),
+    ["projeto"],
+    project,
+  )
     .replace(/\{[a-zA-Z_]+\}/g, "")
     .replace(/[ \t]{2,}/g, " ")
     .replace(/\s+([,.!?;:])/g, "$1")
