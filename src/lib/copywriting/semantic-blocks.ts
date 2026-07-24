@@ -35,7 +35,7 @@ const patternRules: Array<{
 ];
 
 const deliveryItems = [
-  { label: "site profissional", regex: /\bsite(?:\s+profissional)?\b/i },
+  { label: "site profissional", regex: /\bsite\s+profissional\b/i },
   { label: "Instagram", regex: /\binstagram\b/i },
   { label: "Google Meu Negócio", regex: /\bgoogle meu neg[oó]cio\b/i },
   { label: "e-mail corporativo", regex: /\be-?mail corporativo\b/i },
@@ -43,7 +43,7 @@ const deliveryItems = [
 ];
 
 const authorityNames = [
-  "Agência PUB",
+  "L'Oreal Paris",
   "L'Oréal Paris",
   "Globosat",
   "Circo Voador",

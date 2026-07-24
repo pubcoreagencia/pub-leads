@@ -73,14 +73,32 @@ export function validateSemanticPreservation(
     }
   }
 
+  for (const url of original.match(/https?:\/\/\S+/gi) ?? []) {
+    if (!diversified.includes(url.replace(/[).,;]+$/, ""))) {
+      missingCriticalElements.push(`url:${url}`);
+    }
+  }
+
+  if (/ag[eê]ncia pub/i.test(original) && !/ag[eê]ncia pub/i.test(diversified)) {
+    missingCriticalElements.push("Agência PUB");
+  }
+
   for (const term of [blocks.leadName, blocks.city, blocks.deadline ?? "", ...blocks.authorityNames]) {
     if (term && !normalized.includes(normalizeCopyText(term))) {
       missingCriticalElements.push(term);
     }
   }
 
-  if (blocks.deliveryItems.length > 0 && !blocks.deliveryItems.some((item) => normalized.includes(normalizeCopyText(item)))) {
-    missingCriticalElements.push("entrega");
+  for (const item of blocks.deliveryItems) {
+    if (!normalized.includes(normalizeCopyText(item))) {
+      missingCriticalElements.push(`entrega:${item}`);
+    }
+  }
+
+  for (const term of ["valores", "detalhes", "entrega"]) {
+    if (normalizeCopyText(original).includes(term) && !normalized.includes(term)) {
+      missingCriticalElements.push(term);
+    }
   }
 
   if (blocks.hasQuestion && !/\?/.test(diversified) && !mode.includes("ultra")) {
@@ -107,7 +125,7 @@ export function validateCommercialQuality(message: string, mode: CopyDiversifica
     warnings.push("Mensagem longa para WhatsApp curto.");
   }
 
-  if (!/[.!?]$/.test(message)) {
+  if (!/[.!?]$/.test(message) && !/https?:\/\/\S+\/?$/.test(message.trim())) {
     warnings.push("Pontuacao final ausente.");
   }
 

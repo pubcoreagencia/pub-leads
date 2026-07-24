@@ -40,7 +40,7 @@ function targetMaxLength(input: CopyDiversificationInput) {
     const stepName = (input.funnelStepName ?? "").toLowerCase();
 
     if (/primeiro|contato/.test(stepName)) return 80;
-    if (/introdu/.test(stepName)) return 350;
+    if (/introdu/.test(stepName)) return 520;
     if (/explica/.test(stepName)) return 600;
     if (/autoridade/.test(stepName)) return 500;
     if (/escassez/.test(stepName)) return 400;
@@ -52,6 +52,45 @@ function targetMaxLength(input: CopyDiversificationInput) {
   if (input.mode === "short_whatsapp") return 950;
 
   return undefined;
+}
+
+function conservativeFallback(original: string, seed: number) {
+  const replacements: Array<[RegExp, string[]]> = [
+    [/\bO projeto é voltado para\b/i, ["A proposta é voltada para", "O projeto atende", "A ideia é atender"]],
+    [/\bA entrega inclui\b/i, ["Na prática, a entrega inclui", "A estrutura contempla", "O pacote inclui"]],
+    [/\bA estrutura é feita\b/i, ["A estrutura é conduzida", "A entrega é feita", "O projeto é conduzido"]],
+    [/\bque já atuou\b/i, ["que já trabalhou", "com histórico de atuação", "que já participou de projetos"]],
+    [/\bNessa etapa são apenas\b/i, ["Nesta etapa, são somente", "Nesta etapa, são apenas", "A seleção desta etapa tem apenas"]],
+    [/\bCaso não faça sentido\b/i, ["Se não fizer sentido", "Caso não seja prioridade", "Se não for o momento"]],
+    [/\ba vaga segue para\b/i, ["seguimos com", "a vaga vai para", "chamamos"]],
+    [/\bGostaríamos muito que fossem vocês\./i, ["A ideia é avançar com vocês.", "Gostaríamos que essa vaga ficasse com vocês.", "A preferência seria seguir com vocês."]],
+    [/\bPosso te passar os detalhes\b/i, ["Faz sentido eu te enviar os detalhes", "Posso te mandar os detalhes", "Quer que eu te passe os detalhes"]],
+    [/\bPosso te explicar melhor\?/i, ["Posso te explicar rapidamente?", "Faz sentido eu te explicar melhor?", "Posso te mostrar como funciona?"]],
+  ];
+  let next = original;
+  const applied: string[] = [];
+
+  replacements.forEach(([pattern, options], index) => {
+    let changed = false;
+    next = next.replace(pattern, (match) => {
+      if (changed) return match;
+      changed = true;
+      return options[Math.abs(seed + index) % options.length];
+    });
+
+    if (changed) {
+      applied.push(`conservative_${index}`);
+    }
+  });
+
+  if (applied.length === 0 && original.length > 90) {
+    next = original.replace(/([.!?])\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/u, "$1\n\n$2");
+    if (next !== original) {
+      applied.push("conservative_line_break");
+    }
+  }
+
+  return { applied, text: next };
 }
 
 function inferLeadNameFromText(text: string) {
@@ -82,7 +121,7 @@ function diversifyOne(input: CopyDiversificationInput, index = 0): CopyDiversifi
     seed,
     stepName: input.funnelStepName,
   });
-  const synonymized = input.mode === "funnel_step" && original.length <= 120
+  const synonymized = input.mode === "funnel_step"
     ? { applied: [], text: structural.text }
     : applyContextualSynonyms(structural.text, seed);
   const maxLength = targetMaxLength(input);
@@ -102,10 +141,11 @@ function diversifyOne(input: CopyDiversificationInput, index = 0): CopyDiversifi
 
   const semantic = validateSemanticPreservation(original, message, blocks, input.mode);
 
-  if (semantic.score < 72 && input.preserveMeaning !== false) {
-    message = normalizeBrazilianPortuguese(original);
+  if ((semantic.score < 78 || changeScore < minChange) && input.preserveMeaning !== false) {
+    const fallback = conservativeFallback(original, seed);
+    message = normalizeBrazilianPortuguese(enforceMaxLength(fallback.text, maxLength));
     changeScore = calculateChangeScore(original, message);
-    structural.applied.push("semantic_fallback");
+    structural.applied.push(...fallback.applied, "semantic_safe_fallback");
   }
 
   const finalSemantic = validateSemanticPreservation(original, message, blocks, input.mode);
