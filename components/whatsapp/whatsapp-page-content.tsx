@@ -46,6 +46,7 @@ type MessageFunnelStep = {
 
 type MessageFunnel = {
   id: string;
+  is_default: boolean;
   metadata: Record<string, unknown>;
   name: string;
   description: string | null;
@@ -76,6 +77,7 @@ type DiversifyPayload = { message: string; error?: string; diversificationScore?
 type ProfilePayload = { fullName: string };
 type LeadCapturePeriod = "all" | "today" | "last_7_days" | "last_30_days";
 type LeadQueueSort = "newest" | "oldest" | "name_asc" | "niche_asc";
+type CopyFormMode = "view" | "create" | "edit";
 
 const funnelStatusLabels: Record<LeadFunnelState["status"], string> = {
   contacted: "Contato feito",
@@ -307,6 +309,7 @@ export function WhatsAppPageContent() {
   const [baseCopy, setBaseCopy] = useState("");
   const [copyFunnelName, setCopyFunnelName] = useState("");
   const [fullBaseCopy, setFullBaseCopy] = useState("");
+  const [copyFormMode, setCopyFormMode] = useState<CopyFormMode>("view");
   const [message, setMessage] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -334,6 +337,7 @@ export function WhatsAppPageContent() {
   const activeStep = useMemo(() => {
     return selectedFunnel?.steps.find((step) => step.id === activeStepId) ?? selectedFunnel?.steps[0] ?? null;
   }, [activeStepId, selectedFunnel]);
+  const canEditSelectedCopy = Boolean(selectedFunnel && !selectedFunnel.is_default);
   const pendingApproachLeads = useMemo(() => leads.filter(isPendingApproachLead), [leads]);
   const baseApproachLeads = useMemo(
     () =>
@@ -395,13 +399,13 @@ export function WhatsAppPageContent() {
   }, [leadNicheFilter, leadNicheOptions]);
 
   useEffect(() => {
-    if (!selectedFunnel) {
+    if (!selectedFunnel || copyFormMode !== "view") {
       return;
     }
 
     setCopyFunnelName(selectedFunnel.name);
     setFullBaseCopy(getFunnelBaseCopy(selectedFunnel));
-  }, [selectedFunnel]);
+  }, [copyFormMode, selectedFunnel]);
 
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
@@ -645,10 +649,40 @@ export function WhatsAppPageContent() {
     const nextFunnel = funnels.find((funnel) => funnel.id === nextFunnelId);
     const firstStep = nextFunnel?.steps[0] ?? null;
 
+    setCopyFormMode("view");
     setFunnelId(nextFunnelId);
     setActiveStepId(firstStep?.id ?? "");
     setVariantSeed(1);
     setMobileTab("funnel");
+  }
+
+  function handleStartCreateCopy() {
+    setCopyFormMode("create");
+    setCopyFunnelName("");
+    setFullBaseCopy("");
+    setMobileTab("copies");
+  }
+
+  function handleStartEditCopy() {
+    if (!selectedFunnel || selectedFunnel.is_default) {
+      toast({
+        title: "Copy padrao protegida",
+        description: "Crie uma nova copy para personalizar o roteiro padrao.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setCopyFormMode("edit");
+    setCopyFunnelName(selectedFunnel.name);
+    setFullBaseCopy(getFunnelBaseCopy(selectedFunnel));
+    setMobileTab("copies");
+  }
+
+  function handleCancelCopyForm() {
+    setCopyFormMode("view");
+    setCopyFunnelName(selectedFunnel?.name ?? "");
+    setFullBaseCopy(getFunnelBaseCopy(selectedFunnel));
   }
 
   async function handleCreateCopyFunnel() {
@@ -676,8 +710,7 @@ export function WhatsAppPageContent() {
       setFunnels((current) => [payload.funnel, ...current.filter((funnel) => funnel.id !== payload.funnel.id)]);
       setFunnelId(payload.funnel.id);
       setActiveStepId(payload.funnel.steps[0]?.id ?? "");
-      setCopyFunnelName("");
-      setFullBaseCopy("");
+      setCopyFormMode("view");
       setVariantSeed(1);
       setMobileTab("funnel");
       toast({
@@ -688,6 +721,59 @@ export function WhatsAppPageContent() {
     } catch (error) {
       toast({
         title: "Erro ao registrar copy",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsSavingCopyFunnel(false);
+    }
+  }
+
+  async function handleUpdateCopyFunnel() {
+    const name = copyFunnelName.trim();
+    const baseCopyValue = fullBaseCopy.trim();
+
+    if (!selectedFunnel || selectedFunnel.is_default) {
+      toast({
+        title: "Copy padrao protegida",
+        description: "Crie uma nova copy para personalizar o roteiro padrao.",
+        variant: "error",
+      });
+      return;
+    }
+
+    if (name.length < 2 || baseCopyValue.length < 10) {
+      toast({
+        title: "Copy incompleta",
+        description: "Informe um nome e a copy inteira antes de salvar as alteracoes.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsSavingCopyFunnel(true);
+
+    try {
+      const payload = await fetch("/api/message-funnels", {
+        body: JSON.stringify({ baseCopy: baseCopyValue, id: selectedFunnel.id, name }),
+        headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+      }).then((response) => parseJson<CreateFunnelPayload>(response));
+
+      setFunnels((current) => current.map((funnel) => (funnel.id === payload.funnel.id ? payload.funnel : funnel)));
+      setFunnelId(payload.funnel.id);
+      setActiveStepId(payload.funnel.steps[0]?.id ?? "");
+      setCopyFormMode("view");
+      setVariantSeed(1);
+      setMobileTab("funnel");
+      toast({
+        title: "Copy atualizada",
+        description: `${payload.funnel.steps.length} etapas foram atualizadas no funil.`,
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao editar copy",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "error",
       });
@@ -1001,9 +1087,36 @@ export function WhatsAppPageContent() {
                     ))}
                   </select>
                 </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button onClick={handleStartCreateCopy} type="button">
+                    <Sparkles className="h-4 w-4" />
+                    Criar nova copy
+                  </Button>
+                  <Button
+                    disabled={!canEditSelectedCopy}
+                    onClick={handleStartEditCopy}
+                    title={canEditSelectedCopy ? "Editar a copy selecionada" : "A copy padrao do sistema nao pode ser editada"}
+                    type="button"
+                    variant="outline"
+                  >
+                    Editar copy
+                  </Button>
+                </div>
+                {copyFormMode === "view" ? (
+                  <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
+                    Selecione uma copy para usar no funil. Para mudar o conteudo, clique em Editar copy; para cadastrar outra,
+                    clique em Criar nova copy.
+                  </p>
+                ) : null}
+                {selectedFunnel?.is_default ? (
+                  <p className="rounded-md bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-700">
+                    Esta e a copy padrao do sistema. Use Criar nova copy para personalizar sem alterar o roteiro base.
+                  </p>
+                ) : null}
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   Nome da copy
                   <Input
+                    disabled={copyFormMode === "view"}
                     onChange={(event) => setCopyFunnelName(event.target.value)}
                     placeholder="Ex: PUB Start - clínicas"
                     value={copyFunnelName}
@@ -1012,21 +1125,28 @@ export function WhatsAppPageContent() {
                 <label className="grid gap-2 text-sm font-medium text-slate-700">
                   Copy base inteira
                   <textarea
-                    className="min-h-52 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    className="min-h-52 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:bg-slate-50 disabled:text-slate-500"
+                    disabled={copyFormMode === "view"}
                     onChange={(event) => setFullBaseCopy(event.target.value)}
                     placeholder="Cole a sequência completa aqui. Separe os passos por linhas em branco para o sistema transformar em funil."
                     value={fullBaseCopy}
                   />
                 </label>
-                <Button
-                  className="w-full"
-                  disabled={isSavingCopyFunnel || copyFunnelName.trim().length < 2 || fullBaseCopy.trim().length < 10}
-                  onClick={handleCreateCopyFunnel}
-                  type="button"
-                >
-                  {isSavingCopyFunnel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Salvar e separar no funil
-                </Button>
+                {copyFormMode !== "view" ? (
+                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                    <Button
+                      disabled={isSavingCopyFunnel || copyFunnelName.trim().length < 2 || fullBaseCopy.trim().length < 10}
+                      onClick={copyFormMode === "create" ? handleCreateCopyFunnel : handleUpdateCopyFunnel}
+                      type="button"
+                    >
+                      {isSavingCopyFunnel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      {copyFormMode === "create" ? "Salvar nova copy" : "Salvar alteracoes"}
+                    </Button>
+                    <Button disabled={isSavingCopyFunnel} onClick={handleCancelCopyForm} type="button" variant="outline">
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 

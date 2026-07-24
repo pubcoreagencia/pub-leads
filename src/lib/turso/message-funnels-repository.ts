@@ -567,6 +567,97 @@ export async function createMessageFunnelFromBaseCopy(
   return created;
 }
 
+export async function updateMessageFunnelFromBaseCopy(
+  userId: string,
+  funnelId: string,
+  data: {
+    baseCopy: string;
+    name: string;
+  },
+) {
+  await ensureMessageFunnelSchema();
+
+  const existing = await getTursoClient().execute({
+    args: [userId, funnelId],
+    sql: "select * from message_funnels where user_id = ? and id = ? and is_default = 0 and is_active = 1 limit 1",
+  });
+
+  if (!existing.rows[0]) {
+    throw new Error("Copy nao encontrada ou protegida contra edicao.");
+  }
+
+  const now = new Date().toISOString();
+  const steps = buildFunnelStepsFromBaseCopy(data.baseCopy);
+
+  await getTursoClient().execute({
+    args: [
+      data.name.trim(),
+      JSON.stringify({
+        base_copy: data.baseCopy.trim(),
+        source: "user_base_copy",
+        step_count: steps.length,
+        updated_from_editor: true,
+        version: 1,
+      }),
+      now,
+      userId,
+      funnelId,
+    ],
+    sql: `
+      update message_funnels
+      set name = ?, metadata = ?, updated_at = ?
+      where user_id = ? and id = ? and is_default = 0
+    `,
+  });
+
+  await getTursoClient().execute({
+    args: [userId, funnelId, steps.length],
+    sql: "update message_funnel_steps set is_active = 0, updated_at = current_timestamp where user_id = ? and funnel_id = ? and step_order > ?",
+  });
+
+  for (const [index, step] of steps.entries()) {
+    const order = index + 1;
+
+    await getTursoClient().execute({
+      args: [
+        `${funnelId}-step-${order}`,
+        funnelId,
+        userId,
+        order,
+        step.name,
+        step.objective,
+        step.template,
+        step.wait_hint,
+        JSON.stringify({ source: "user_base_copy", updated_from_editor: true, version: 1 }),
+        now,
+        now,
+      ],
+      sql: `
+        insert into message_funnel_steps (
+          id, funnel_id, user_id, step_order, name, objective, template, wait_hint, metadata, created_at, updated_at
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        on conflict(id) do update set
+          name = excluded.name,
+          objective = excluded.objective,
+          template = excluded.template,
+          wait_hint = excluded.wait_hint,
+          metadata = excluded.metadata,
+          is_active = 1,
+          updated_at = excluded.updated_at
+      `,
+    });
+  }
+
+  const updated = await getMessageFunnel(userId, funnelId);
+
+  if (!updated) {
+    throw new Error("Copy atualizada, mas nao encontrada no Turso.");
+  }
+
+  return updated;
+}
+
 export async function getOrCreateLeadFunnelState(userId: string, leadId: string, funnelId = DEFAULT_FUNNEL_ID) {
   await ensureMessageFunnelSchema();
 

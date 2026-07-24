@@ -3,11 +3,19 @@ import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import { getTursoUnavailableMessage, hasTursoConfig } from "@/src/lib/turso/client";
-import { createMessageFunnelFromBaseCopy, listMessageFunnels } from "@/src/lib/turso/message-funnels-repository";
+import {
+  createMessageFunnelFromBaseCopy,
+  listMessageFunnels,
+  updateMessageFunnelFromBaseCopy,
+} from "@/src/lib/turso/message-funnels-repository";
 
 const createFunnelSchema = z.object({
   baseCopy: z.string().trim().min(10).max(8000),
   name: z.string().trim().min(2).max(80),
+});
+
+const updateFunnelSchema = createFunnelSchema.extend({
+  id: z.string().trim().min(1),
 });
 
 async function getUserId() {
@@ -60,4 +68,33 @@ export async function POST(request: Request) {
   const funnel = await createMessageFunnelFromBaseCopy(userId, parsed.data);
 
   return NextResponse.json({ funnel });
+}
+
+export async function PATCH(request: Request) {
+  if (!hasTursoConfig()) {
+    return NextResponse.json({ error: getTursoUnavailableMessage() }, { status: 503 });
+  }
+
+  const userId = await getUserId();
+
+  if (!userId) {
+    return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
+  }
+
+  const parsed = updateFunnelSchema.safeParse(await request.json());
+
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
+  }
+
+  try {
+    const funnel = await updateMessageFunnelFromBaseCopy(userId, parsed.data.id, parsed.data);
+
+    return NextResponse.json({ funnel });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Nao foi possivel editar a copy." },
+      { status: 400 },
+    );
+  }
 }
