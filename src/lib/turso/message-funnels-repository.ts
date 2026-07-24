@@ -844,7 +844,7 @@ export async function createLeadMessageEvent(
     `,
   });
 
-  if ((data.event_type === "copied" || data.event_type === "opened_whatsapp") && data.funnel_id) {
+  if (data.event_type === "copied" && data.funnel_id) {
     await updateLeadFunnelState(userId, lead.id, {
       current_step_id: data.step_id ?? undefined,
       current_step_order: data.step_order ?? undefined,
@@ -852,7 +852,7 @@ export async function createLeadMessageEvent(
     });
   }
 
-  if (data.event_type === "marked_sent") {
+  if (data.event_type === "opened_whatsapp" || data.event_type === "marked_sent") {
     const status: FunnelStateStatus = data.step_order && data.step_order >= 7 ? "follow_up" : "contacted";
     await updateLeadFunnelState(userId, lead.id, {
       current_step_id: data.step_id ?? undefined,
