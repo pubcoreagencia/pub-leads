@@ -46,6 +46,7 @@ type MessageFunnelStep = {
 
 type MessageFunnel = {
   id: string;
+  metadata: Record<string, unknown>;
   name: string;
   description: string | null;
   steps: MessageFunnelStep[];
@@ -226,6 +227,24 @@ function renderLocalTemplate(template: string, lead: Lead | null, operatorName: 
   return applyTimeAwareGreeting(applyOperatorIntroPhrase(rendered, operator, template.length + lead.id.length));
 }
 
+function getFunnelBaseCopy(funnel: MessageFunnel | null) {
+  if (!funnel) {
+    return "";
+  }
+
+  const storedBaseCopy = funnel.metadata.base_copy;
+
+  if (typeof storedBaseCopy === "string" && storedBaseCopy.trim()) {
+    return storedBaseCopy.trim();
+  }
+
+  return [...funnel.steps]
+    .sort((first, second) => first.step_order - second.step_order)
+    .map((step) => step.template.trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 async function parseJson<T>(response: Response) {
   const payload = (await response.json()) as T & { error?: string };
 
@@ -334,6 +353,16 @@ export function WhatsAppPageContent() {
       setLeadNicheFilter("all");
     }
   }, [leadNicheFilter, leadNicheOptions]);
+
+  useEffect(() => {
+    if (!selectedFunnel) {
+      return;
+    }
+
+    setCopyFunnelName(selectedFunnel.name);
+    setFullBaseCopy(getFunnelBaseCopy(selectedFunnel));
+  }, [selectedFunnel]);
+
   const selectedIndex = approachLeads.findIndex((lead) => lead.id === leadId);
   const qualification = selectedLead ? getLeadQualification(selectedLead) : null;
   const instagramUrl = qualification?.instagram_url ?? null;

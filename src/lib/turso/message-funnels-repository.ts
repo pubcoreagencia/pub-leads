@@ -235,6 +235,8 @@ const defaultSteps = [
   },
 ];
 
+const defaultBaseCopy = defaultSteps.map((step) => step.template).join("\n\n");
+
 let ensured = false;
 
 function parseJson(value: unknown) {
@@ -417,7 +419,12 @@ async function seedDefaultFunnel() {
       DEFAULT_FUNNEL_ID,
       "Funil PUB Start",
       "Roteiro padrão de abordagem comercial manual da Agência PUB.",
-      JSON.stringify({ source: "system_default", version: 1 }),
+      JSON.stringify({
+        base_copy: defaultBaseCopy,
+        source: "system_default",
+        step_count: defaultSteps.length,
+        version: 2,
+      }),
       now,
       now,
     ],
@@ -429,6 +436,7 @@ async function seedDefaultFunnel() {
         description = excluded.description,
         is_default = 1,
         is_active = 1,
+        metadata = excluded.metadata,
         updated_at = excluded.updated_at
     `,
   });
