@@ -69,6 +69,7 @@ type LeadMessageEvent = {
 };
 
 type FunnelPayload = { funnels: MessageFunnel[] };
+type CreateFunnelPayload = { funnel: MessageFunnel };
 type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
 type DiversifyPayload = { message: string; error?: string; diversificationScore?: number };
 type ProfilePayload = { fullName: string };
@@ -245,12 +246,15 @@ export function WhatsAppPageContent() {
   const [events, setEvents] = useState<LeadMessageEvent[]>([]);
   const [activeStepId, setActiveStepId] = useState("");
   const [baseCopy, setBaseCopy] = useState("");
+  const [copyFunnelName, setCopyFunnelName] = useState("");
+  const [fullBaseCopy, setFullBaseCopy] = useState("");
   const [message, setMessage] = useState("");
   const [operatorName, setOperatorName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingState, setIsLoadingState] = useState(false);
   const [isActing, setIsActing] = useState(false);
   const [isDeletingLead, setIsDeletingLead] = useState(false);
+  const [isSavingCopyFunnel, setIsSavingCopyFunnel] = useState(false);
   const [usesMobileWhatsappApp, setUsesMobileWhatsappApp] = useState(false);
   const [onlyEligibleLeads, setOnlyEligibleLeads] = useState(true);
   const [leadSearchQuery, setLeadSearchQuery] = useState("");
@@ -258,7 +262,7 @@ export function WhatsAppPageContent() {
   const [leadNicheFilter, setLeadNicheFilter] = useState("all");
   const [leadQueueSort, setLeadQueueSort] = useState<LeadQueueSort>("newest");
   const [variantSeed, setVariantSeed] = useState(1);
-  const [mobileTab, setMobileTab] = useState<"queue" | "funnel" | "message" | "action">("queue");
+  const [mobileTab, setMobileTab] = useState<"queue" | "copies" | "funnel" | "message" | "action">("queue");
 
   const selectedLead = useMemo(
     () => leads.find((lead) => lead.id === leadId) ?? null,
@@ -568,6 +572,61 @@ export function WhatsAppPageContent() {
     }
   }
 
+  function handleSelectFunnel(nextFunnelId: string) {
+    const nextFunnel = funnels.find((funnel) => funnel.id === nextFunnelId);
+    const firstStep = nextFunnel?.steps[0] ?? null;
+
+    setFunnelId(nextFunnelId);
+    setActiveStepId(firstStep?.id ?? "");
+    setVariantSeed(1);
+    setMobileTab("funnel");
+  }
+
+  async function handleCreateCopyFunnel() {
+    const name = copyFunnelName.trim();
+    const baseCopyValue = fullBaseCopy.trim();
+
+    if (name.length < 2 || baseCopyValue.length < 10) {
+      toast({
+        title: "Copy incompleta",
+        description: "Informe um nome e cole a copy inteira antes de salvar.",
+        variant: "error",
+      });
+      return;
+    }
+
+    setIsSavingCopyFunnel(true);
+
+    try {
+      const payload = await fetch("/api/message-funnels", {
+        body: JSON.stringify({ baseCopy: baseCopyValue, name }),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      }).then((response) => parseJson<CreateFunnelPayload>(response));
+
+      setFunnels((current) => [payload.funnel, ...current.filter((funnel) => funnel.id !== payload.funnel.id)]);
+      setFunnelId(payload.funnel.id);
+      setActiveStepId(payload.funnel.steps[0]?.id ?? "");
+      setCopyFunnelName("");
+      setFullBaseCopy("");
+      setVariantSeed(1);
+      setMobileTab("funnel");
+      toast({
+        title: "Copy registrada",
+        description: `${payload.funnel.steps.length} etapas foram criadas no funil.`,
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao registrar copy",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "error",
+      });
+    } finally {
+      setIsSavingCopyFunnel(false);
+    }
+  }
+
   async function handleAdvanceStep() {
     if (!selectedFunnel || !activeStep || !selectedLead) {
       return;
@@ -675,9 +734,10 @@ export function WhatsAppPageContent() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
+          <div className="grid grid-cols-5 gap-2 rounded-lg border border-slate-200 bg-white p-1 xl:hidden">
             {[
               ["queue", "Fila"],
+              ["copies", "Copys"],
               ["funnel", "Funil"],
               ["message", "Mensagem"],
               ["action", "Ação"],
@@ -848,7 +908,59 @@ export function WhatsAppPageContent() {
               </CardContent>
             </Card>
 
-            <div className={`${mobileTab === "queue" ? "hidden" : "block"} grid min-w-0 gap-5 xl:grid xl:grid-cols-[minmax(230px,0.58fr)_minmax(420px,1fr)] 2xl:block`}>
+            <div className={`${mobileTab === "queue" ? "hidden" : "block"} grid min-w-0 gap-5 xl:grid xl:grid-cols-[minmax(270px,0.68fr)_minmax(420px,1fr)] 2xl:block`}>
+            <div className={`${mobileTab === "copies" || mobileTab === "funnel" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
+            <Card className={`${mobileTab === "copies" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
+              <CardHeader>
+                <CardTitle>Copys registradas</CardTitle>
+                <p className="text-sm leading-6 text-slate-500">
+                  Cole uma copy inteira, salve como roteiro e alterne entre os funis registrados.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  Copy ativa
+                  <select
+                    className="h-10 rounded-md border border-input bg-white px-3 text-sm font-normal outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => handleSelectFunnel(event.target.value)}
+                    value={selectedFunnel?.id ?? ""}
+                  >
+                    {funnels.map((funnel) => (
+                      <option key={funnel.id} value={funnel.id}>
+                        {funnel.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  Nome da copy
+                  <Input
+                    onChange={(event) => setCopyFunnelName(event.target.value)}
+                    placeholder="Ex: PUB Start - clínicas"
+                    value={copyFunnelName}
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-medium text-slate-700">
+                  Copy base inteira
+                  <textarea
+                    className="min-h-52 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                    onChange={(event) => setFullBaseCopy(event.target.value)}
+                    placeholder="Cole a sequência completa aqui. Separe os passos por linhas em branco para o sistema transformar em funil."
+                    value={fullBaseCopy}
+                  />
+                </label>
+                <Button
+                  className="w-full"
+                  disabled={isSavingCopyFunnel || copyFunnelName.trim().length < 2 || fullBaseCopy.trim().length < 10}
+                  onClick={handleCreateCopyFunnel}
+                  type="button"
+                >
+                  {isSavingCopyFunnel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Salvar e separar no funil
+                </Button>
+              </CardContent>
+            </Card>
+
             <Card className={`${mobileTab === "funnel" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
               <CardHeader>
                 <CardTitle>{selectedFunnel.name}</CardTitle>
@@ -891,6 +1003,7 @@ export function WhatsAppPageContent() {
                 })}
               </CardContent>
             </Card>
+            </div>
 
             <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
               <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>

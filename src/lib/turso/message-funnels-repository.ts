@@ -86,6 +86,98 @@ export type LeadMessageEvent = {
 
 export const DEFAULT_FUNNEL_ID = "pub-start-default";
 
+const copyFunnelStepDefinitions = [
+  {
+    name: "Primeiro contato",
+    objective: "Abrir conversa sem assustar o lead.",
+    wait_hint: "Enviar apenas quando for iniciar o contato.",
+  },
+  {
+    name: "Introdução",
+    objective: "Se apresentar e pedir permissão para explicar.",
+    wait_hint: "Usar depois que o lead responder ao primeiro contato.",
+  },
+  {
+    name: "Explicação curta",
+    objective: "Explicar entrega e proposta.",
+    wait_hint: "Enviar se o lead aceitar entender o projeto.",
+  },
+  {
+    name: "Autoridade",
+    objective: "Reforçar confiança.",
+    wait_hint: "Usar quando o lead pedir segurança, referências ou contexto.",
+  },
+  {
+    name: "Escassez",
+    objective: "Reforçar limite de vagas.",
+    wait_hint: "Usar quando houver demora ou indecisão.",
+  },
+  {
+    name: "CTA",
+    objective: "Chamar para o próximo passo.",
+    wait_hint: "Usar para puxar a conversa para decisão.",
+  },
+  {
+    name: "Follow-up 1",
+    objective: "Retomar sem pressionar.",
+    wait_hint: "Usar após algumas horas ou no próximo dia útil.",
+  },
+  {
+    name: "Follow-up 2",
+    objective: "Última tentativa antes de seguir a lista.",
+    wait_hint: "Usar como encerramento respeitoso.",
+  },
+];
+
+function cleanCopyBlock(value: string) {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function splitBaseCopyIntoBlocks(baseCopy: string) {
+  const normalized = cleanCopyBlock(baseCopy)
+    .replace(/^\s*(?:passo|etapa)\s*\d+\s*[:.)-]\s*/gim, "")
+    .replace(/^\s*\d+\s*[:.)-]\s*/gm, "");
+  const paragraphBlocks = normalized
+    .split(/\n{2,}/)
+    .map((block) => cleanCopyBlock(block))
+    .filter(Boolean);
+
+  if (paragraphBlocks.length > 1) {
+    return paragraphBlocks;
+  }
+
+  return normalized
+    .split(/\n+/)
+    .map((block) => cleanCopyBlock(block))
+    .filter(Boolean);
+}
+
+function buildFunnelStepsFromBaseCopy(baseCopy: string) {
+  const blocks = splitBaseCopyIntoBlocks(baseCopy);
+  const usableBlocks = blocks.length > 0 ? blocks : [cleanCopyBlock(baseCopy)];
+  const limitedBlocks = usableBlocks.slice(0, copyFunnelStepDefinitions.length);
+
+  if (usableBlocks.length > copyFunnelStepDefinitions.length) {
+    limitedBlocks[copyFunnelStepDefinitions.length - 1] = cleanCopyBlock(
+      [
+        limitedBlocks[copyFunnelStepDefinitions.length - 1],
+        ...usableBlocks.slice(copyFunnelStepDefinitions.length),
+      ]
+        .filter(Boolean)
+        .join("\n\n"),
+    );
+  }
+
+  return limitedBlocks.map((template, index) => ({
+    ...copyFunnelStepDefinitions[index],
+    template,
+  }));
+}
+
 const defaultSteps = [
   {
     name: "Primeiro contato",
@@ -398,6 +490,75 @@ export async function getMessageFunnel(userId: string, funnelId = DEFAULT_FUNNEL
   return funnels.find((funnel) => funnel.id === funnelId) ?? funnels[0] ?? null;
 }
 
+export async function createMessageFunnelFromBaseCopy(
+  userId: string,
+  data: {
+    baseCopy: string;
+    name: string;
+  },
+) {
+  await ensureMessageFunnelSchema();
+
+  const now = new Date().toISOString();
+  const funnelId = crypto.randomUUID();
+  const steps = buildFunnelStepsFromBaseCopy(data.baseCopy);
+
+  await getTursoClient().execute({
+    args: [
+      funnelId,
+      userId,
+      data.name.trim(),
+      "Copy base separada automaticamente em etapas para abordagem manual.",
+      JSON.stringify({
+        base_copy: data.baseCopy.trim(),
+        source: "user_base_copy",
+        step_count: steps.length,
+        version: 1,
+      }),
+      now,
+      now,
+    ],
+    sql: `
+      insert into message_funnels (id, user_id, name, description, is_default, is_active, metadata, created_at, updated_at)
+      values (?, ?, ?, ?, 0, 1, ?, ?, ?)
+    `,
+  });
+
+  for (const [index, step] of steps.entries()) {
+    const order = index + 1;
+
+    await getTursoClient().execute({
+      args: [
+        `${funnelId}-step-${order}`,
+        funnelId,
+        userId,
+        order,
+        step.name,
+        step.objective,
+        step.template,
+        step.wait_hint,
+        JSON.stringify({ source: "user_base_copy", version: 1 }),
+        now,
+        now,
+      ],
+      sql: `
+        insert into message_funnel_steps (
+          id, funnel_id, user_id, step_order, name, objective, template, wait_hint, metadata, created_at, updated_at
+        )
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+    });
+  }
+
+  const created = await getMessageFunnel(userId, funnelId);
+
+  if (!created) {
+    throw new Error("Funil criado, mas nao encontrado no Turso.");
+  }
+
+  return created;
+}
+
 export async function getOrCreateLeadFunnelState(userId: string, leadId: string, funnelId = DEFAULT_FUNNEL_ID) {
   await ensureMessageFunnelSchema();
 
@@ -453,7 +614,7 @@ export async function getOrCreateLeadFunnelState(userId: string, leadId: string,
 export async function updateLeadFunnelState(
   userId: string,
   leadId: string,
-  data: Partial<Pick<LeadFunnelState, "current_step_id" | "current_step_order" | "last_message_at" | "last_reply_at" | "metadata" | "next_follow_up_at" | "status">>,
+  data: Partial<Pick<LeadFunnelState, "current_step_id" | "current_step_order" | "funnel_id" | "last_message_at" | "last_reply_at" | "metadata" | "next_follow_up_at" | "status">>,
 ) {
   const current = await getOrCreateLeadFunnelState(userId, leadId);
 
@@ -465,6 +626,10 @@ export async function updateLeadFunnelState(
   const args: InValue[] = [];
 
   for (const [key, value] of Object.entries(data)) {
+    if (typeof value === "undefined") {
+      continue;
+    }
+
     sets.push(`${key} = ?`);
     args.push(key === "metadata" ? JSON.stringify(value ?? {}) : (value as InValue));
   }
@@ -539,9 +704,20 @@ export async function createLeadMessageEvent(
     `,
   });
 
+  if ((data.event_type === "copied" || data.event_type === "opened_whatsapp") && data.funnel_id) {
+    await updateLeadFunnelState(userId, lead.id, {
+      current_step_id: data.step_id ?? undefined,
+      current_step_order: data.step_order ?? undefined,
+      funnel_id: data.funnel_id,
+    });
+  }
+
   if (data.event_type === "marked_sent") {
     const status: FunnelStateStatus = data.step_order && data.step_order >= 7 ? "follow_up" : "contacted";
     await updateLeadFunnelState(userId, lead.id, {
+      current_step_id: data.step_id ?? undefined,
+      current_step_order: data.step_order ?? undefined,
+      funnel_id: data.funnel_id ?? undefined,
       last_message_at: now,
       status,
     });
@@ -552,6 +728,9 @@ export async function createLeadMessageEvent(
 
   if (data.event_type === "marked_replied") {
     await updateLeadFunnelState(userId, lead.id, {
+      current_step_id: data.step_id ?? undefined,
+      current_step_order: data.step_order ?? undefined,
+      funnel_id: data.funnel_id ?? undefined,
       last_reply_at: now,
       status: "replied",
     });
@@ -562,6 +741,7 @@ export async function createLeadMessageEvent(
     await updateLeadFunnelState(userId, lead.id, {
       current_step_id: data.step_id ?? null,
       current_step_order: data.step_order ?? 1,
+      funnel_id: data.funnel_id ?? undefined,
       status: data.step_order && data.step_order >= 7 ? "follow_up" : "explaining",
     });
   }
