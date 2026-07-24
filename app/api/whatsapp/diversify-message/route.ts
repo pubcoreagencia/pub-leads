@@ -5,15 +5,16 @@ import { createClient } from "@/lib/supabase/server";
 import { hasTursoConfig, getTursoUnavailableMessage } from "@/src/lib/turso/client";
 import { createMessage } from "@/src/lib/turso/lead-messages-repository";
 import { getLeadById } from "@/src/lib/turso/leads-repository";
-import { diversifyBaseCopyWithReport } from "@/src/lib/whatsapp/copy-diversifier";
+import { diversifyCopy } from "@/src/lib/copywriting";
 import { manualWhatsAppProvider } from "@/src/lib/whatsapp/provider";
 
 const diversifyMessageSchema = z.object({
   baseCopy: z.string().trim().min(10).max(5000).optional(),
   city: z.string().trim().max(120).optional().default(""),
+  count: z.coerce.number().int().min(1).max(5).optional().default(1),
   copyBase: z.string().trim().min(10).max(5000).optional(),
   leadId: z.string().uuid(),
-  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short", "same_strength"]).optional().default("short_whatsapp"),
+  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short", "same_strength", "funnel_step"]).optional().default("short_whatsapp"),
   niche: z.string().trim().max(120).optional().default(""),
   variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
 }).refine((data) => data.baseCopy || data.copyBase, {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
   }
 
-  const { city, leadId, mode, niche, variantSeed } = parsed.data;
+  const { city, count, leadId, mode, niche, variantSeed } = parsed.data;
   const baseCopy = parsed.data.baseCopy ?? parsed.data.copyBase ?? "";
   const lead = await getLeadById(user.id, leadId);
 
@@ -49,8 +50,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Lead nao encontrado." }, { status: 404 });
   }
 
-  const diversification = diversifyBaseCopyWithReport({
-    baseCopy,
+  const diversification = diversifyCopy({
+    count,
+    originalText: baseCopy,
     city,
     lead,
     mode,
@@ -67,24 +69,25 @@ export async function POST(request: Request) {
     message,
     objective: JSON.stringify({
       city,
-      diversificationScore: diversification.diversificationScore,
+      changeScore: diversification.stats.changeScore,
       diversified: true,
       finalLength: diversification.stats.finalLength,
       mode,
       niche,
       reductionPercent: diversification.stats.reductionPercent,
       source: "base_copy_diversification",
-      transformationsApplied: diversification.transformationsApplied,
+      transformationsApplied: diversification.stats.transformationsApplied,
     }),
     tone: "base_copy_diversification",
   });
 
   return NextResponse.json({
-    diversificationScore: diversification.diversificationScore,
+    diversificationScore: diversification.stats.changeScore,
     message,
     savedMessage,
     stats: diversification.stats,
-    transformationsApplied: diversification.transformationsApplied,
+    transformationsApplied: diversification.stats.transformationsApplied.length,
+    variations: diversification.variations,
     waLink,
   });
 }

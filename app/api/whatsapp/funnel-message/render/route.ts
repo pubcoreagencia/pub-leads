@@ -2,18 +2,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
-import { getLeadById } from "@/src/lib/turso/leads-repository";
 import { getTursoUnavailableMessage, hasTursoConfig } from "@/src/lib/turso/client";
+import { getLeadById } from "@/src/lib/turso/leads-repository";
 import { getMessageFunnel } from "@/src/lib/turso/message-funnels-repository";
-import { diversifyCopy } from "@/src/lib/copywriting";
 import { renderFunnelMessage } from "@/src/lib/whatsapp/message-funnel";
 
-const diversifySchema = z.object({
-  count: z.coerce.number().int().min(1).max(5).optional().default(1),
+const renderSchema = z.object({
   funnelId: z.string().trim().optional(),
   leadId: z.string().uuid(),
   stepId: z.string().trim(),
-  variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
 });
 
 export async function POST(request: Request) {
@@ -31,7 +28,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Usuario nao autenticado." }, { status: 401 });
   }
 
-  const parsed = diversifySchema.safeParse(await request.json());
+  const parsed = renderSchema.safeParse(await request.json());
 
   if (!parsed.success) {
     return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
@@ -55,27 +52,12 @@ export async function POST(request: Request) {
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
-  const renderedMessage = renderFunnelMessage({
+  const message = renderFunnelMessage({
     context: { funnelName: funnel.name, operatorName: profile?.full_name ?? null },
     lead,
     template: step.template,
     user,
   });
-  const diversification = diversifyCopy({
-    count: parsed.data.count,
-    funnelStepName: step.name,
-    funnelStepObjective: step.objective,
-    lead,
-    mode: "funnel_step",
-    operatorName: profile?.full_name ?? null,
-    originalText: step.template,
-    renderedText: renderedMessage,
-    variantSeed: parsed.data.variantSeed,
-  });
 
-  return NextResponse.json({
-    message: diversification.message,
-    stats: diversification.stats,
-    variations: diversification.variations,
-  });
+  return NextResponse.json({ message });
 }

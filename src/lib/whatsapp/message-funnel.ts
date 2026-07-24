@@ -1,6 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
 import type { Lead } from "@/schemas/lead";
+import { diversifyCopy } from "@/src/lib/copywriting";
 import type { MessageFunnelStep } from "@/src/lib/turso/message-funnels-repository";
 
 export type RenderFunnelMessageInput = {
@@ -421,13 +422,15 @@ export function diversifyFunnelStepMessage({
   step,
   variantSeed = 1,
 }: DiversifyFunnelStepMessageInput) {
-  const variations = stepVariations[step.step_order];
+  const legacyVariationCount = stepVariations[step.step_order]?.length ?? 0;
 
-  if (!variations || variations.length === 0) {
-    return renderedMessage;
-  }
-
-  const index = (hashText(`${lead.id}|${step.id}|${variantSeed}`) + variantSeed) % variations.length;
-
-  return variations[index];
+  return diversifyCopy({
+    funnelStepName: step.name,
+    funnelStepObjective: step.objective,
+    lead,
+    mode: "funnel_step",
+    originalText: step.template,
+    renderedText: renderedMessage,
+    variantSeed: `${lead.id}|${step.id}|${variantSeed}|${legacyVariationCount}`,
+  }).message;
 }

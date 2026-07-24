@@ -73,11 +73,28 @@ type LeadMessageEvent = {
 type FunnelPayload = { funnels: MessageFunnel[] };
 type CreateFunnelPayload = { funnel: MessageFunnel };
 type StatePayload = { events: LeadMessageEvent[]; state: LeadFunnelState };
-type DiversifyPayload = { message: string; error?: string; diversificationScore?: number };
 type ProfilePayload = { fullName: string };
 type LeadCapturePeriod = "all" | "today" | "last_7_days" | "last_30_days";
 type LeadQueueSort = "newest" | "oldest" | "name_asc" | "niche_asc";
 type CopyFormMode = "view" | "create" | "edit";
+type CopyVariationMode = "short_whatsapp" | "balanced" | "high_variation" | "ultra_short";
+type CopyVariation = {
+  message: string;
+  stats?: {
+    changeScore?: number;
+    finalLength?: number;
+    reductionPercent?: number;
+    transformationsApplied?: string[];
+    warnings?: string[];
+  };
+};
+type DiversifyPayload = {
+  diversificationScore?: number;
+  error?: string;
+  message: string;
+  stats?: CopyVariation["stats"];
+  variations?: CopyVariation[];
+};
 
 const funnelStatusLabels: Record<LeadFunnelState["status"], string> = {
   contacted: "Contato feito",
@@ -311,6 +328,8 @@ export function WhatsAppPageContent() {
   const [fullBaseCopy, setFullBaseCopy] = useState("");
   const [copyFormMode, setCopyFormMode] = useState<CopyFormMode>("view");
   const [message, setMessage] = useState("");
+  const [copyVariationMode, setCopyVariationMode] = useState<CopyVariationMode>("short_whatsapp");
+  const [copyVariations, setCopyVariations] = useState<CopyVariation[]>([]);
   const [operatorName, setOperatorName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingState, setIsLoadingState] = useState(false);
@@ -604,7 +623,7 @@ export function WhatsAppPageContent() {
     await recordEvent("opened_whatsapp");
   }
 
-  async function handleDiversifyStep() {
+  async function handleDiversifyStep(count = 1) {
     if (!selectedLead) {
       return;
     }
@@ -625,8 +644,9 @@ export function WhatsAppPageContent() {
         body: JSON.stringify({
           baseCopy,
           city: selectedLead.city ?? "",
+          count,
           leadId: selectedLead.id,
-          mode: "same_strength",
+          mode: copyVariationMode,
           niche: selectedLead.category ?? "",
           variantSeed,
         }),
@@ -634,6 +654,7 @@ export function WhatsAppPageContent() {
         method: "POST",
       }).then((response) => parseJson<DiversifyPayload>(response));
       setMessage(payload.message);
+      setCopyVariations(payload.variations ?? []);
       setVariantSeed((current) => current + 1);
     } catch (error) {
       toast({
@@ -1305,6 +1326,7 @@ export function WhatsAppPageContent() {
                       onChange={(event) => {
                         setBaseCopy(event.target.value);
                         setMessage(event.target.value);
+                        setCopyVariations([]);
                       }}
                       placeholder="Cole aqui a copy que deve ser diversificada"
                       value={baseCopy}
@@ -1321,16 +1343,55 @@ export function WhatsAppPageContent() {
                   {activeStep?.wait_hint ? (
                     <p className="text-xs leading-5 text-slate-500">{activeStep.wait_hint}</p>
                   ) : null}
+                  <label className="grid gap-2 text-sm font-medium text-slate-700">
+                    Modo de variação
+                    <select
+                      className="h-10 rounded-md border border-input bg-white px-3 text-sm font-normal outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                      onChange={(event) => setCopyVariationMode(event.target.value as CopyVariationMode)}
+                      value={copyVariationMode}
+                    >
+                      <option value="short_whatsapp">Curta para WhatsApp</option>
+                      <option value="balanced">Equilibrada</option>
+                      <option value="high_variation">Alta variação</option>
+                      <option value="ultra_short">Muito curta</option>
+                    </select>
+                  </label>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button disabled={isActing || !selectedLead || baseCopy.trim().length < 10} onClick={handleDiversifyStep} type="button" variant="outline">
+                    <Button disabled={isActing || !selectedLead || baseCopy.trim().length < 10} onClick={() => handleDiversifyStep(1)} type="button" variant="outline">
                       <Sparkles className="h-4 w-4" />
-                      Diversificar copy
+                      Variar mensagem
+                    </Button>
+                    <Button disabled={isActing || !selectedLead || baseCopy.trim().length < 10} onClick={() => handleDiversifyStep(3)} type="button" variant="outline">
+                      <Sparkles className="h-4 w-4" />
+                      Gerar 3 variações
                     </Button>
                     <Button disabled={!message || isActing} onClick={handleCopyMessage} type="button">
                       <Clipboard className="h-4 w-4" />
                       Copiar mensagem
                     </Button>
                   </div>
+                  {copyVariations.length > 1 ? (
+                    <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Variações geradas</p>
+                      {copyVariations.map((variation, index) => (
+                        <button
+                          className={`w-full rounded-md border p-3 text-left text-sm leading-6 transition ${
+                            variation.message === message ? "border-red-300 bg-white text-slate-950" : "border-slate-200 bg-white/70 text-slate-600 hover:border-red-200"
+                          }`}
+                          key={`${variation.message}-${index}`}
+                          onClick={() => setMessage(variation.message)}
+                          type="button"
+                        >
+                          <span className="mb-1 block text-xs font-semibold text-red-700">
+                            Opção {index + 1}
+                            {typeof variation.stats?.changeScore === "number" ? ` · diferença ${variation.stats.changeScore}` : ""}
+                            {typeof variation.stats?.finalLength === "number" ? ` · ${variation.stats.finalLength} caracteres` : ""}
+                          </span>
+                          {variation.message}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
 
