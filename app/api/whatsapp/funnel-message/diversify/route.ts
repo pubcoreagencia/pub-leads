@@ -9,7 +9,6 @@ import { diversifyCopy } from "@/src/lib/copywriting";
 import { renderFunnelMessage } from "@/src/lib/whatsapp/message-funnel";
 
 const diversifySchema = z.object({
-  count: z.coerce.number().int().min(1).max(5).optional().default(1),
   funnelId: z.string().trim().optional(),
   leadId: z.string().uuid(),
   stepId: z.string().trim(),
@@ -62,7 +61,6 @@ export async function POST(request: Request) {
     user,
   });
   const diversification = diversifyCopy({
-    count: parsed.data.count,
     funnelStepName: step.name,
     funnelStepObjective: step.objective,
     lead,
@@ -76,6 +74,5 @@ export async function POST(request: Request) {
   return NextResponse.json({
     message: diversification.message,
     stats: diversification.stats,
-    variations: diversification.variations,
   });
 }

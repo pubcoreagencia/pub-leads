@@ -37,6 +37,37 @@ function tokenSet(text: string) {
   );
 }
 
+function meaningfulTokens(text: string) {
+  return normalizeCopyText(text)
+    .split(" ")
+    .filter((token) => token.length > 3 && !stopwords.has(token));
+}
+
+function uniqueMatches(text: string, pattern: RegExp) {
+  return Array.from(new Set(text.match(pattern) ?? [])).map((value) => value.trim());
+}
+
+function protectedLiterals(text: string, blocks: SemanticBlocks) {
+  return Array.from(
+    new Set(
+      [
+        ...blocks.numbers,
+        ...blocks.prices,
+        blocks.leadName,
+        blocks.city,
+        blocks.deadline ?? "",
+        ...blocks.authorityNames,
+        ...uniqueMatches(text, /https?:\/\/\S+/gi).map((value) => value.replace(/[).,;]+$/, "")),
+        ...uniqueMatches(text, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gi),
+      ].filter(Boolean),
+    ),
+  );
+}
+
+function exactSet(values: string[]) {
+  return new Set(values.map((value) => normalizeCopyText(value)));
+}
+
 export function calculateChangeScore(original: string, diversified: string) {
   const originalTokens = tokenSet(original);
   const diversifiedTokens = tokenSet(diversified);
@@ -48,7 +79,9 @@ export function calculateChangeScore(original: string, diversified: string) {
   const orderChanged = originalSentences.some((sentence, index) => sentence.trim() !== diversifiedSentences[index]?.trim());
   const lengthDelta = original.length > 0 ? Math.min(20, Math.round(Math.abs(original.length - diversified.length) / original.length * 100)) : 0;
 
-  return Math.max(0, Math.min(100, tokenDistance + lengthDelta + (orderChanged ? 25 : 0)));
+  const paragraphChanged = original.replace(/\r\n/g, "\n").split(/\n{2,}/).length !== diversified.replace(/\r\n/g, "\n").split(/\n{2,}/).length;
+
+  return Math.max(0, Math.min(100, tokenDistance + lengthDelta + (orderChanged ? 20 : 0) + (paragraphChanged ? 8 : 0)));
 }
 
 export function validateSemanticPreservation(
@@ -60,33 +93,31 @@ export function validateSemanticPreservation(
   const normalized = normalizeCopyText(diversified);
   const missingCriticalElements: string[] = [];
   const warnings: string[] = [];
+  const originalTokens = meaningfulTokens(original);
+  const diversifiedTokens = new Set(meaningfulTokens(diversified));
+  const retainedTokens = originalTokens.filter((token) => diversifiedTokens.has(token)).length;
+  const lexicalCoverage = originalTokens.length > 0 ? retainedTokens / originalTokens.length : 1;
 
-  for (const number of blocks.numbers) {
-    if (!normalized.includes(normalizeCopyText(number))) {
-      missingCriticalElements.push(`numero:${number}`);
+  for (const literal of protectedLiterals(original, blocks)) {
+    if (!normalized.includes(normalizeCopyText(literal))) {
+      missingCriticalElements.push(literal);
     }
   }
 
-  for (const price of blocks.prices) {
-    if (!normalized.includes(normalizeCopyText(price))) {
-      missingCriticalElements.push(`valor:${price}`);
-    }
-  }
-
-  for (const url of original.match(/https?:\/\/\S+/gi) ?? []) {
-    if (!diversified.includes(url.replace(/[).,;]+$/, ""))) {
+  for (const url of uniqueMatches(original, /https?:\/\/\S+/gi).map((value) => value.replace(/[).,;]+$/, ""))) {
+    if (!diversified.includes(url)) {
       missingCriticalElements.push(`url:${url}`);
+    }
+  }
+
+  for (const email of uniqueMatches(original, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/gi)) {
+    if (!diversified.includes(email)) {
+      missingCriticalElements.push(`email:${email}`);
     }
   }
 
   if (/ag[eê]ncia pub/i.test(original) && !/ag[eê]ncia pub/i.test(diversified)) {
     missingCriticalElements.push("Agência PUB");
-  }
-
-  for (const term of [blocks.leadName, blocks.city, blocks.deadline ?? "", ...blocks.authorityNames]) {
-    if (term && !normalized.includes(normalizeCopyText(term))) {
-      missingCriticalElements.push(term);
-    }
   }
 
   for (const item of blocks.deliveryItems) {
@@ -105,11 +136,25 @@ export function validateSemanticPreservation(
     warnings.push("CTA/pergunta ausente.");
   }
 
+  if (lexicalCoverage < 0.62) {
+    warnings.push("A versão perdeu partes relevantes da copy original.");
+  }
+
+  const originalNumbers = exactSet(uniqueMatches(original, /\b\d+(?:[.,]\d+)?(?:\s*(?:a|e|-)\s*\d+)?\b/g));
+  const diversifiedNumbers = exactSet(uniqueMatches(diversified, /\b\d+(?:[.,]\d+)?(?:\s*(?:a|e|-)\s*\d+)?\b/g));
+
+  for (const number of diversifiedNumbers) {
+    if (!originalNumbers.has(number)) {
+      missingCriticalElements.push(`numero_inventado:${number}`);
+    }
+  }
+
   if (mode === "funnel_step" && original.length <= 90 && diversified.length > 120) {
     warnings.push("Passo curto ficou longo demais.");
   }
 
-  const score = Math.max(0, 100 - missingCriticalElements.length * 14 - warnings.length * 6);
+  const coveragePenalty = Math.round(Math.max(0, 0.9 - lexicalCoverage) * 55);
+  const score = Math.max(0, 100 - missingCriticalElements.length * 18 - warnings.length * 8 - coveragePenalty);
 
   return { missingCriticalElements, score, warnings };
 }

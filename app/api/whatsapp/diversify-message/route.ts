@@ -11,10 +11,8 @@ import { manualWhatsAppProvider } from "@/src/lib/whatsapp/provider";
 const diversifyMessageSchema = z.object({
   baseCopy: z.string().trim().min(10).max(5000).optional(),
   city: z.string().trim().max(120).optional().default(""),
-  count: z.coerce.number().int().min(1).max(5).optional().default(1),
   copyBase: z.string().trim().min(10).max(5000).optional(),
   leadId: z.string().uuid(),
-  mode: z.enum(["short_whatsapp", "balanced", "high_variation", "ultra_short", "same_strength", "funnel_step"]).optional().default("short_whatsapp"),
   niche: z.string().trim().max(120).optional().default(""),
   variantSeed: z.coerce.number().int().min(0).max(100000).optional().default(1),
 }).refine((data) => data.baseCopy || data.copyBase, {
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Parametros invalidos." }, { status: 400 });
   }
 
-  const { city, count, leadId, mode, niche, variantSeed } = parsed.data;
+  const { city, leadId, niche, variantSeed } = parsed.data;
   const baseCopy = parsed.data.baseCopy ?? parsed.data.copyBase ?? "";
   const lead = await getLeadById(user.id, leadId);
 
@@ -51,11 +49,10 @@ export async function POST(request: Request) {
   }
 
   const diversification = diversifyCopy({
-    count,
     originalText: baseCopy,
     city,
     lead,
-    mode,
+    mode: "funnel_step",
     niche,
     variantSeed,
   });
@@ -72,7 +69,7 @@ export async function POST(request: Request) {
       changeScore: diversification.stats.changeScore,
       diversified: true,
       finalLength: diversification.stats.finalLength,
-      mode,
+      mode: "conservative",
       niche,
       reductionPercent: diversification.stats.reductionPercent,
       source: "base_copy_diversification",
@@ -87,7 +84,6 @@ export async function POST(request: Request) {
     savedMessage,
     stats: diversification.stats,
     transformationsApplied: diversification.stats.transformationsApplied.length,
-    variations: diversification.variations,
     waLink,
   });
 }

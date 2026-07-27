@@ -34,7 +34,6 @@ export type RewritePattern = {
 
 export type CopyDiversificationInput = {
   city?: string | null;
-  count?: number;
   funnelStepName?: string | null;
   funnelStepObjective?: string | null;
   lead?: Lead | null;
@@ -67,9 +66,7 @@ export type CopyDiversificationOutput = {
   stats: CopyDiversificationStats;
 };
 
-export type CopyDiversificationResponse = CopyDiversificationOutput & {
-  variations: CopyDiversificationOutput[];
-};
+export type CopyDiversificationResponse = CopyDiversificationOutput;
 
 export type RenderedPlaceholderContext = {
   city: string;
