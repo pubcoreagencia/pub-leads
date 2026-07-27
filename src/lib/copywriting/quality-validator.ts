@@ -97,6 +97,8 @@ export function validateSemanticPreservation(
   const diversifiedTokens = new Set(meaningfulTokens(diversified));
   const retainedTokens = originalTokens.filter((token) => diversifiedTokens.has(token)).length;
   const lexicalCoverage = originalTokens.length > 0 ? retainedTokens / originalTokens.length : 1;
+  const minimumLexicalCoverage = original.length <= 180 ? 0.3 : 0.45;
+  const targetLexicalCoverage = original.length <= 180 ? 0.52 : 0.7;
 
   for (const literal of protectedLiterals(original, blocks)) {
     if (!normalized.includes(normalizeCopyText(literal))) {
@@ -136,7 +138,7 @@ export function validateSemanticPreservation(
     warnings.push("CTA/pergunta ausente.");
   }
 
-  if (lexicalCoverage < 0.62) {
+  if (lexicalCoverage < minimumLexicalCoverage) {
     warnings.push("A versão perdeu partes relevantes da copy original.");
   }
 
@@ -153,7 +155,7 @@ export function validateSemanticPreservation(
     warnings.push("Passo curto ficou longo demais.");
   }
 
-  const coveragePenalty = Math.round(Math.max(0, 0.9 - lexicalCoverage) * 55);
+  const coveragePenalty = Math.round(Math.max(0, targetLexicalCoverage - lexicalCoverage) * 38);
   const score = Math.max(0, 100 - missingCriticalElements.length * 18 - warnings.length * 8 - coveragePenalty);
 
   return { missingCriticalElements, score, warnings };

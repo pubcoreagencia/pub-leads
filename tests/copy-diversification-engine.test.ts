@@ -13,6 +13,49 @@ function diversify(text: string, variantSeed = 1) {
   });
 }
 
+const funnelSteps = [
+  {
+    mustKeep: ["boa tarde"],
+    name: "Primeiro contato",
+    text: "Olá, boa tarde!",
+  },
+  {
+    mustKeep: ["Agência PUB", "Clínica Exemplo", "5", "Projeto Niterói"],
+    name: "Introdução",
+    text: "Eu sou a Luana, representante comercial da Agência PUB. Estou entrando em contato porque a Clínica Exemplo foi uma das 5 empresas de odontologia selecionadas para o nosso Projeto Niterói. Posso te explicar rapidamente como funciona?",
+  },
+  {
+    mustKeep: ["site profissional", "Instagram", "Google Meu Negócio", "e-mail corporativo", "WhatsApp Business", "3 a 7 dias"],
+    name: "Explicação curta",
+    text: "O projeto é voltado para empresas já consolidadas, mas que ainda não têm uma presença digital no nível que merecem. A entrega inclui site profissional, Instagram, Google Meu Negócio, e-mail corporativo e WhatsApp Business — tudo pronto em 3 a 7 dias.",
+  },
+  {
+    mustKeep: ["Agência PUB", "L'Oréal Paris", "Globosat", "Vamos Dubai", "https://pub-start.pages.dev/"],
+    name: "Autoridade",
+    text: "A estrutura é feita pela Agência PUB, que já atuou com marcas e nomes como L'Oréal Paris, Globosat, Circo Voador, Gabriel Pensador, Diogo Defante, Paulinho Serra e Vamos Dubai. O site do serviço é https://pub-start.pages.dev/",
+  },
+  {
+    mustKeep: ["5", "concorrente direto"],
+    name: "Escassez",
+    text: "Nessa etapa são apenas 5 empresas selecionadas. Caso não faça sentido para vocês, a vaga segue para a próxima empresa da lista — possivelmente um concorrente direto.",
+  },
+  {
+    mustKeep: ["detalhes", "entrega", "valores"],
+    name: "CTA",
+    text: "Gostaríamos muito que fossem vocês. Posso te passar os detalhes da entrega e valores?",
+  },
+  {
+    mustKeep: ["Projeto Niterói", "empresas"],
+    name: "Follow-up 1",
+    text: "Passando só para confirmar se fez sentido eu te explicar melhor o Projeto Niterói. Ainda estamos organizando as empresas selecionadas dessa etapa.",
+  },
+  {
+    mustKeep: ["vagas", "Clínica Exemplo"],
+    name: "Follow-up 2",
+    text: "Como são poucas vagas, vou precisar seguir com a próxima empresa da lista caso não seja uma prioridade para vocês agora. Mas, sinceramente, gostaríamos bastante que a Clínica Exemplo participasse.",
+  },
+];
+
 test("reescreve sem inventar um contexto comercial ausente", () => {
   const original =
     "A maioria das clínicas perde agendamentos não por falta de qualidade, mas porque o paciente não encontra informações claras antes de decidir. Organizamos esse caminho sem mudar a rotina da equipe. Quer ver um exemplo?";
@@ -66,40 +109,7 @@ test("gera uma única saída e varia a construção entre tentativas", () => {
 });
 
 test("mantém o objetivo e os fatos dos passos principais do funil", () => {
-  const steps = [
-    {
-      mustKeep: ["boa tarde"],
-      name: "Primeiro contato",
-      text: "Olá, boa tarde!",
-    },
-    {
-      mustKeep: ["Agência PUB", "Clínica Exemplo", "5", "Projeto Niterói"],
-      name: "Introdução",
-      text: "Eu sou a Luana, representante comercial da Agência PUB. Estou entrando em contato porque a Clínica Exemplo foi uma das 5 empresas de odontologia selecionadas para o nosso Projeto Niterói. Posso te explicar rapidamente como funciona?",
-    },
-    {
-      mustKeep: ["site profissional", "Instagram", "Google Meu Negócio", "e-mail corporativo", "WhatsApp Business", "3 a 7 dias"],
-      name: "Explicação curta",
-      text: "O projeto é voltado para empresas já consolidadas, mas que ainda não têm uma presença digital no nível que merecem. A entrega inclui site profissional, Instagram, Google Meu Negócio, e-mail corporativo e WhatsApp Business — tudo pronto em 3 a 7 dias.",
-    },
-    {
-      mustKeep: ["Agência PUB", "L'Oréal Paris", "Globosat", "Vamos Dubai", "https://pub-start.pages.dev/"],
-      name: "Autoridade",
-      text: "A estrutura é feita pela Agência PUB, que já atuou com marcas e nomes como L'Oréal Paris, Globosat, Circo Voador, Gabriel Pensador, Diogo Defante, Paulinho Serra e Vamos Dubai. O site do serviço é https://pub-start.pages.dev/",
-    },
-    {
-      mustKeep: ["5", "concorrente direto"],
-      name: "Escassez",
-      text: "Nessa etapa são apenas 5 empresas selecionadas. Caso não faça sentido para vocês, a vaga segue para a próxima empresa da lista — possivelmente um concorrente direto.",
-    },
-    {
-      mustKeep: ["detalhes", "entrega", "valores"],
-      name: "CTA",
-      text: "Gostaríamos muito que fossem vocês. Posso te passar os detalhes da entrega e valores?",
-    },
-  ];
-
-  for (const step of steps) {
+  for (const step of funnelSteps) {
     const result = diversifyCopy({
       funnelStepName: step.name,
       mode: "funnel_step",
@@ -116,5 +126,39 @@ test("mantém o objetivo e os fatos dos passos principais do funil", () => {
     }
 
     assert.ok(result.stats.semanticPreservationScore >= 82, `${step.name} perdeu conteúdo relevante`);
+  }
+});
+
+test("oferece dezenas de combinações válidas em todos os passos do funil", () => {
+  for (const step of funnelSteps) {
+    const messages = Array.from(
+      { length: 24 },
+      (_, index) =>
+        diversifyCopy({
+          funnelStepName: step.name,
+          mode: "funnel_step",
+          originalText: step.text,
+          renderedText: step.text,
+          variantSeed: index + 1,
+        }).message,
+    );
+    const uniqueMessages = new Set(messages);
+    const expectedMinimum = step.name === "Primeiro contato" ? 18 : 20;
+
+    assert.ok(
+      uniqueMessages.size >= expectedMinimum,
+      `${step.name} gerou somente ${uniqueMessages.size} versões únicas`,
+    );
+
+    for (const message of uniqueMessages) {
+      for (const literal of step.mustKeep) {
+        assert.ok(
+          message.toLocaleLowerCase("pt-BR").includes(literal.toLocaleLowerCase("pt-BR")),
+          `${step.name} deveria preservar "${literal}" em todas as versões`,
+        );
+      }
+
+      assert.doesNotMatch(message, /\b(?:das as|do o|de a)\b|organização das as|porque\s+Para\b/i);
+    }
   }
 });

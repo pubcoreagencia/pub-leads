@@ -94,6 +94,7 @@ function scoreCandidate(
     applied,
     changeScore,
     commercialWarnings,
+    lengthRatio,
     message: candidate,
     score,
     semantic,
@@ -105,24 +106,33 @@ export function diversifyCopy(input: CopyDiversificationInput): CopyDiversificat
   const original = normalizeBrazilianPortuguese(
     input.renderedText?.trim() || renderCopyPlaceholders(input.originalText, context),
   );
-  const seed = hashText(`${input.variantSeed ?? 1}|${original}|${input.lead?.id ?? ""}`);
-  const candidates = buildConservativeRewriteCandidates(original, seed)
-    .map((candidate) => scoreCandidate(original, candidate.message, input, candidate.applied, seed))
+  const stableSeed = hashText(`${original}|${input.lead?.id ?? ""}`);
+  const variantSeed =
+    typeof input.variantSeed === "number"
+      ? Math.max(0, input.variantSeed)
+      : hashText(String(input.variantSeed ?? 1));
+  const candidates = buildConservativeRewriteCandidates(original, stableSeed)
+    .map((candidate) => scoreCandidate(original, candidate.message, input, candidate.applied, stableSeed))
     .filter(
       (candidate) =>
         candidate.semantic.missingCriticalElements.length === 0 &&
         candidate.semantic.score >= 82 &&
+        candidate.semantic.warnings.length === 0 &&
+        candidate.commercialWarnings.length === 0 &&
+        candidate.lengthRatio >= 0.72 &&
+        candidate.lengthRatio <= (original.length <= 60 ? 2.8 : 1.35) &&
         candidate.changeScore >= (original.length > 120 ? 14 : 7),
     )
     .sort((left, right) => right.score - left.score);
+  const candidatePool = candidates.slice(0, 64);
   const chosen =
-    candidates[0] ??
+    candidatePool[variantSeed % Math.max(1, candidatePool.length)] ??
     scoreCandidate(
       original,
       normalizeBrazilianPortuguese(fallbackFormatting(original)),
       input,
       ["safe_paragraph_fallback"],
-      seed,
+      stableSeed,
     );
   const contextBlocks = extractSemanticBlocks(original, {
     city: context.city || inferCityFromText(original),
