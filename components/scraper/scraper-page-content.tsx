@@ -150,7 +150,7 @@ const sourceLabels: Record<string, string> = {
   apify_instagram: "Apify Instagram",
   cnpj_brasil: "CNPJ Brasil",
   google_places: "Google Places oficial",
-  apify_google_maps: "Apify",
+  apify_google_maps: "Apify Google Maps",
   openstreetmap: "OpenStreetMap/Overpass",
   site_sales: "Venda de Sites",
 };
@@ -708,8 +708,8 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           headers: { "Content-Type": "application/json" }, method: "POST",
         }).then((response) => parseJsonResponse<{ budget: { limit: number; spent: number; estimated: number }; run: { run_id: string } }>(response));
         setQualificationProgress(`Apify em execução. Orçamento: US$ ${started.budget.spent.toFixed(2)} de US$ ${started.budget.limit.toFixed(2)}; estimativa US$ ${started.budget.estimated.toFixed(2)}.`);
-        for (let attempt = 0; attempt < 30; attempt += 1) {
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+        for (let attempt = 0; attempt < 90; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
           const runState = await fetch(`/api/lead-sources/apify/runs/${started.run.run_id}`).then((response) => parseJsonResponse<{ run: { status: string } }>(response));
           if (runState.run.status === "failed" || runState.run.status === "aborted") throw new Error("A execução Apify não foi concluída.");
           if (runState.run.status === "succeeded") {
@@ -720,7 +720,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
             return;
           }
         }
-        throw new Error("A execução Apify continua em andamento. Tente novamente em alguns instantes.");
+        throw new Error("A execução Apify está demorando mais que o esperado. A busca continua em andamento — recarregue a página em alguns minutos para ver os resultados.");
       }
 
       const endpointBySource: Record<Exclude<LeadSearchSource, "apify_google_maps">, string> = {
@@ -1664,7 +1664,7 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
                           OSM
                         </span>
                       ) : null}
-                      {lead.source === "apify_instagram" || lead.source === "apify_google_search" || lead.source === "apify_generic" ? (
+                      {lead.source === "apify_google_maps" || lead.source === "apify_instagram" || lead.source === "apify_google_search" || lead.source === "apify_generic" ? (
                         <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">
                           Apify
                         </span>

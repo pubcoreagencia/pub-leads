@@ -24,7 +24,7 @@ export function mapApifyGoogleMapsItem(item: Record<string, unknown>, city: stri
     rating: typeof item.rating === "number" ? item.rating : null,
     rawData: { ...item, apify_source: "google_maps" },
     reviewsCount: typeof item.reviewsCount === "number" ? item.reviewsCount : null,
-    source: "google_places" as const,
+    source: "apify_google_maps" as const,
     sourcePlaceId,
     sourceUrl: typeof item.url === "string" ? item.url : null,
     state,

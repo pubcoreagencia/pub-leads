@@ -5,6 +5,7 @@ export type LeadSourceId =
   | "openstreetmap"
   | "cnpj_brasil"
   | "google_places"
+  | "apify_google_maps"
   | "apify_instagram"
   | "apify_google_search"
   | "apify_generic";
