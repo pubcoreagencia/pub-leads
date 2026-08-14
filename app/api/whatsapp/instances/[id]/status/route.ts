@@ -32,19 +32,15 @@ export async function GET(
   try {
     const { serverUrl, apiKey } = getEvolutionConfig();
 
-    // 1. Checa status puro da conexão sem disparar reconexão
+    // 1. Checa status puro da conexão na Evolution API
     const statusData = await getEvolutionInstanceStatus(
       serverUrl,
       apiKey,
       instance.instance_name,
     );
 
-    let status = instance.status;
-    let qr = null;
-
+    // Se estiver 'open', o WhatsApp foi conectado com sucesso!
     if (statusData.state === "open") {
-      status = "open";
-      // Se conectou, limpa o QR code do banco
       await updateWhatsappInstance(user.id, instance.id, {
         status: "open",
         qr_code: null,
@@ -55,34 +51,28 @@ export async function GET(
       });
     }
 
-    if (statusData.state === "connecting") {
-      status = "connecting";
-      await updateWhatsappInstance(user.id, instance.id, { status: "connecting" });
-      return NextResponse.json({
-        instance: { ...instance, status: "connecting" },
-        qrcode: null,
-      });
-    }
+    // Se não estiver 'open', a instância ainda está aguardando escaneamento
+    let qr = instance.qr_code ? { base64: instance.qr_code } : null;
 
-    // 2. Só tenta obter novo QR Code se for explicitamente solicitado via refresh=true ou se a instância não tiver nenhum QR
-    if (refreshQr || (!instance.qr_code && status === "close")) {
+    // Se o QR expirou ou foi solicitado um novo explicitamente via refresh
+    if (refreshQr || !qr) {
       try {
-        qr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
-        if (qr.base64 || qr.code) {
-          status = "qrcode";
+        const newQr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
+        if (newQr.base64) {
+          qr = { base64: newQr.base64 };
           await updateWhatsappInstance(user.id, instance.id, {
             status: "qrcode",
-            qr_code: qr.base64 ?? null,
+            qr_code: newQr.base64,
           });
         }
       } catch {
-        status = "close";
+        // Mantém o estado atual se falhar
       }
     }
 
     return NextResponse.json({
-      instance: { ...instance, status, qr_code: qr?.base64 ?? instance.qr_code },
-      qrcode: qr ?? (instance.qr_code ? { base64: instance.qr_code } : null),
+      instance: { ...instance, status: "qrcode", qr_code: qr?.base64 ?? null },
+      qrcode: qr,
     });
   } catch (error) {
     return NextResponse.json({
