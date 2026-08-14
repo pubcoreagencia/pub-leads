@@ -1,8 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { listWhatsappInstances } from "@/src/lib/turso/whatsapp-instances-repository";
-import { sendEvolutionTextMessage } from "@/src/lib/whatsapp/evolution-client";
+import {
+  listWhatsappInstances,
+  updateWhatsappInstance,
+} from "@/src/lib/turso/whatsapp-instances-repository";
+import {
+  getEvolutionInstanceStatus,
+  sendEvolutionTextMessage,
+} from "@/src/lib/whatsapp/evolution-client";
 import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
+
+// Permite até 30s para a execução da serverless function na Vercel
+export const maxDuration = 30;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -23,21 +32,44 @@ export async function POST(request: Request) {
 
     // Carrega instâncias do usuário
     const instances = await listWhatsappInstances(user.id);
-
-    // Seleciona a instância: usa instanceId se fornecido, caso contrário pega a primeira conectada
-    const instance = instanceId
-      ? instances.find((i) => i.id === instanceId && i.status === "open")
-      : instances.find((i) => i.status === "open");
-
-    if (!instance) {
+    if (instances.length === 0) {
       return NextResponse.json(
-        { error: "Nenhuma instância de WhatsApp conectada. Vá em Conexões e escaneie o QR Code." },
+        { error: "Nenhuma instância de WhatsApp cadastrada. Vá em Conexões e escaneie o QR Code." },
         { status: 422 },
       );
     }
 
-    // Usa credenciais globais (env vars) em vez das gravadas no banco
     const { serverUrl, apiKey } = getEvolutionConfig();
+
+    // 1. Tenta achar uma instância com status 'open' localmente
+    let instance = instanceId
+      ? instances.find((i) => i.id === instanceId && i.status === "open")
+      : instances.find((i) => i.status === "open");
+
+    // 2. Fallback inteligente: se não encontrou 'open', checa o status real na Evolution API
+    if (!instance) {
+      const candidates = instanceId ? instances.filter((i) => i.id === instanceId) : instances;
+      for (const candidate of candidates) {
+        try {
+          const liveStatus = await getEvolutionInstanceStatus(serverUrl, apiKey, candidate.instance_name);
+          if (liveStatus.state === "open") {
+            instance = { ...candidate, status: "open" };
+            // Atualiza no Turso em segundo plano
+            void updateWhatsappInstance(user.id, candidate.id, { status: "open" });
+            break;
+          }
+        } catch {
+          // Continua procurando
+        }
+      }
+    }
+
+    if (!instance) {
+      return NextResponse.json(
+        { error: "Nenhum WhatsApp conectado no momento. Vá em Conexões e escaneie o QR Code." },
+        { status: 422 },
+      );
+    }
 
     const result = await sendEvolutionTextMessage(
       serverUrl,
@@ -49,8 +81,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, result });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Erro ao enviar mensagem.";
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Erro ao enviar mensagem." },
+      { error: msg.includes("Timeout") || msg.includes("aborted") ? "Tempo limite ao disparar WhatsApp. Verifique se o aparelho está online." : msg },
       { status: 500 },
     );
   }
