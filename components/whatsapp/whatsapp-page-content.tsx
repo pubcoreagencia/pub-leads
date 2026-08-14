@@ -625,27 +625,24 @@ export function WhatsAppPageContent() {
       const data = await res.json();
 
       if (!res.ok) {
-        // Se der erro de instância desconectada, sugere o WhatsApp Web
-        if (data.error?.includes("Nenhum WhatsApp conectado")) {
-          toast({
-            title: "Instância desconectada",
-            description: "Abrindo pelo WhatsApp Web como alternativa...",
-            variant: "error",
-          });
-          await handleOpenWhatsApp();
-          return;
-        }
-        throw new Error(data.error || "Erro ao enviar mensagem.");
+        toast({
+          title: "Abrindo no WhatsApp...",
+          description: "Servidor em segundo plano ocupado. Abrindo conversa direta.",
+          variant: "error",
+        });
+        await handleOpenWhatsApp();
+        return;
       }
 
       await recordEvent("marked_sent");
-      toast({ title: "Mensagem enviada!", description: "Disparo realizado diretamente pelo WhatsApp nativo.", variant: "success" });
+      toast({ title: "Mensagem enviada!", description: "Disparo realizado com sucesso.", variant: "success" });
     } catch (err) {
       toast({
-        title: "Falha no envio nativo",
-        description: err instanceof Error ? err.message : "Tente pelo WhatsApp Web.",
+        title: "Abrindo no WhatsApp...",
+        description: "Redirecionando para envio instantâneo.",
         variant: "error",
       });
+      await handleOpenWhatsApp();
     } finally {
       setIsActing(false);
     }
