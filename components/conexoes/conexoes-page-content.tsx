@@ -21,8 +21,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import type { WhatsappInstance } from "@/src/lib/turso/whatsapp-instances-repository";
 
-// Intervalo do polling automático de QR Code (ms)
-const QR_POLL_INTERVAL = 4000;
+// Intervalo do polling de QR Code (ms)
+const QR_POLL_INTERVAL = 3000;
 // Timeout máximo de espera pelo scan (ms) — 3 minutos
 const QR_TIMEOUT = 180_000;
 
@@ -33,10 +33,10 @@ export function ConexoesPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [evolutionUnavailable, setEvolutionUnavailable] = useState(false);
 
-  // Form state — só o nome agora
+  // Form state
   const [name, setName] = useState("");
 
-  // QR Code polling
+  // QR Code state
   const [activeQrInstance, setActiveQrInstance] = useState<WhatsappInstance | null>(null);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -44,7 +44,7 @@ export function ConexoesPageContent() {
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
 
-  // ─── Polling automático do QR ─────────────────────────────────────────────
+  // ─── Polling do status da conexão ──────────────────────────────────────────
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -55,8 +55,9 @@ export function ConexoesPageContent() {
   }, []);
 
   const checkStatus = useCallback(
-    async (instance: WhatsappInstance): Promise<"open" | "qrcode" | "close"> => {
-      const res = await fetch(`/api/whatsapp/instances/${instance.id}/status`);
+    async (instance: WhatsappInstance, refresh = false): Promise<"open" | "connecting" | "qrcode" | "close"> => {
+      const url = `/api/whatsapp/instances/${instance.id}/status${refresh ? "?refresh=true" : ""}`;
+      const res = await fetch(url);
       const data = await res.json() as {
         instance?: WhatsappInstance;
         qrcode?: { base64?: string };
@@ -71,10 +72,12 @@ export function ConexoesPageContent() {
         );
         if (data.qrcode?.base64) {
           setQrCodeData(data.qrcode.base64);
-          return "qrcode";
         }
         if (data.instance.status === "open") {
           return "open";
+        }
+        if (data.instance.status === "connecting") {
+          return "connecting";
         }
       }
       return "close";
@@ -89,7 +92,6 @@ export function ConexoesPageContent() {
       pollStartRef.current = Date.now();
 
       pollTimerRef.current = setInterval(async () => {
-        // Timeout: para o polling após QR_TIMEOUT
         if (Date.now() - pollStartRef.current > QR_TIMEOUT) {
           stopPolling();
           toast({
@@ -101,30 +103,29 @@ export function ConexoesPageContent() {
         }
 
         try {
-          const status = await checkStatus(instance);
+          const status = await checkStatus(instance, false);
           if (status === "open") {
             stopPolling();
             setActiveQrInstance(null);
             setQrCodeData(null);
             toast({
               title: "✅ WhatsApp Conectado!",
-              description: `A instância "${instance.name}" está ativa.`,
+              description: `A instância "${instance.name}" foi conectada com sucesso.`,
               variant: "success",
             });
-            // Recarrega lista
+            // Recarrega a lista de instâncias
             const res = await fetch("/api/whatsapp/instances");
             const d = await res.json() as { instances?: WhatsappInstance[] };
             if (d.instances) setInstances(d.instances);
           }
         } catch {
-          // Ignora erros pontuais no polling
+          // Ignora falhas pontuais de rede no polling
         }
       }, QR_POLL_INTERVAL);
     },
     [checkStatus, stopPolling],
   );
 
-  // Para o polling ao desmontar
   useEffect(() => () => stopPolling(), [stopPolling]);
 
   // ─── Carregar instâncias ───────────────────────────────────────────────────
@@ -208,19 +209,15 @@ export function ConexoesPageContent() {
   async function handleOpenQr(instance: WhatsappInstance) {
     setIsCheckingStatus(true);
     try {
-      const status = await checkStatus(instance);
+      const status = await checkStatus(instance, true);
       if (status === "open") {
         toast({ title: "Já conectado!", description: "Este WhatsApp já está ativo.", variant: "success" });
         return;
       }
-      if (qrCodeData) {
-        setActiveQrInstance(instance);
-        startPolling(instance);
-      } else {
-        toast({ title: "QR Code indisponível", description: "Tente recarregar a página.", variant: "error" });
-      }
+      setActiveQrInstance(instance);
+      startPolling(instance);
     } catch {
-      toast({ title: "Erro de status", description: "Não foi possível obter o status.", variant: "error" });
+      toast({ title: "Erro de status", description: "Não foi possível obter o QR Code.", variant: "error" });
     } finally {
       setIsCheckingStatus(false);
     }
@@ -248,15 +245,11 @@ export function ConexoesPageContent() {
     }
   }
 
-  // ─── Fechar QR Code modal ─────────────────────────────────────────────────
-
   function handleCloseQr() {
     stopPolling();
     setActiveQrInstance(null);
     setQrCodeData(null);
   }
-
-  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <section className="space-y-6">
@@ -274,7 +267,6 @@ export function ConexoesPageContent() {
         }
       />
 
-      {/* Alerta: Evolution API não configurada */}
       {evolutionUnavailable ? (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
@@ -333,7 +325,7 @@ export function ConexoesPageContent() {
                     ) : (
                       <XCircle className="h-3 w-3" />
                     )}
-                    {isConnected ? "Conectado" : "Aguardando QR"}
+                    {isConnected ? "Conectado" : instance.status === "connecting" ? "Conectando..." : "Aguardando QR"}
                   </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-3 space-y-3">
@@ -364,7 +356,7 @@ export function ConexoesPageContent() {
                         variant="outline"
                         onClick={async () => {
                           setIsCheckingStatus(true);
-                          await checkStatus(instance).catch(() => null);
+                          await checkStatus(instance, false).catch(() => null);
                           setIsCheckingStatus(false);
                         }}
                         disabled={isCheckingStatus}
@@ -389,7 +381,7 @@ export function ConexoesPageContent() {
         </div>
       )}
 
-      {/* MODAL CRIAR INSTÂNCIA — formulário simplificado */}
+      {/* MODAL CRIAR INSTÂNCIA */}
       {showCreateModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <Card className="w-full max-w-sm border-slate-200 bg-white shadow-xl">
@@ -423,7 +415,7 @@ export function ConexoesPageContent() {
                     onChange={(e) => setName(e.target.value)}
                   />
                   <p className="text-xs text-slate-400">
-                    Este nome aparece na lista de conexões — use algo descritivo.
+                    Este nome aparece na lista de conexões.
                   </p>
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-2">
@@ -450,7 +442,7 @@ export function ConexoesPageContent() {
         </div>
       ) : null}
 
-      {/* MODAL QR CODE — com polling automático */}
+      {/* MODAL QR CODE COM AUTO-DETECT */}
       {activeQrInstance && qrCodeData ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-sm border-slate-200 bg-white shadow-2xl">
@@ -486,9 +478,9 @@ export function ConexoesPageContent() {
               </div>
 
               {isPolling ? (
-                <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium">
+                <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium animate-pulse">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Aguardando conexão automaticamente...
+                  Aguardando escaneamento...
                 </div>
               ) : null}
 
@@ -506,7 +498,7 @@ export function ConexoesPageContent() {
                   onClick={async () => {
                     setIsCheckingStatus(true);
                     try {
-                      const status = await checkStatus(activeQrInstance);
+                      const status = await checkStatus(activeQrInstance, false);
                       if (status === "open") {
                         handleCloseQr();
                         toast({
@@ -517,9 +509,8 @@ export function ConexoesPageContent() {
                         void loadInstances();
                       } else {
                         toast({
-                          title: "Ainda não conectado",
-                          description: "Escaneie o QR Code e tente novamente.",
-                          variant: "error",
+                          title: "Ainda conectando...",
+                          description: "O WhatsApp está finalizando a sincronização. Aguarde alguns segundos.",
                         });
                       }
                     } catch {
