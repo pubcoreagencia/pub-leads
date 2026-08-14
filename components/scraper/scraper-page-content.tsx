@@ -132,7 +132,7 @@ function pickGoogleMapsApifySource(sources: ApifySourceDefinition[], currentId?:
 }
 
 const initialForm: SearchFormState = {
-  source: "site_sales",
+  source: "apify_google_maps",
   city: "",
   state: "",
   country: DEFAULT_COUNTRY,
@@ -141,7 +141,7 @@ const initialForm: SearchFormState = {
   limit: "25",
   onlyWithPhone: true,
   onlyWithWebsite: false,
-  onlyWithoutWebsite: true,
+  onlyWithoutWebsite: false,
 };
 
 const sourceLabels: Record<string, string> = {
@@ -1339,28 +1339,28 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
           <form className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-12" onSubmit={handleSearchWithSession}>
             {canSelectSource ? (
               <div className="grid gap-2 xl:col-span-3">
-                <Label htmlFor="source">Fonte de teste</Label>
+                <Label htmlFor="source">Motor de Prospecção</Label>
                 <select
                   className="h-11 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
                   id="source"
                   onChange={(event) => handleSourceChange(event.target.value as LeadSearchSource)}
                   value={form.source}
                 >
-                  <option value="site_sales">Venda de Sites (CNPJ + OSM)</option>
-                  <option value="cnpj_brasil">CNPJ Brasil</option>
-                  <option value="openstreetmap">OpenStreetMap/Overpass</option>
-                  <option disabled={!googlePlacesEnabled} value="google_places">
-                    {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
-                  </option>
                   <option disabled={!apifyEnabled} value="apify_google_maps">
                     {apifyEnabled
-                      ? "Apify - fontes disponiveis"
+                      ? "⭐ Apify Google Maps (Recomendado - WhatsApp + Instagram)"
                       : apifyAvailability.reason === "budget_exceeded"
                         ? "Apify (orcamento atingido)"
                         : "Apify (requer token ou permissao)"}
                   </option>
+                  <option value="site_sales">Venda de Sites (CNPJ + OSM)</option>
+                  <option value="cnpj_brasil">CNPJ Brasil (Receita Federal)</option>
+                  <option value="openstreetmap">OpenStreetMap/Overpass</option>
+                  <option disabled={!googlePlacesEnabled} value="google_places">
+                    {googlePlacesEnabled ? "Google Places oficial" : "Google Places (requer API key)"}
+                  </option>
                 </select>
-                <p className="text-xs leading-5 text-slate-500">Modo desenvolvedor. {sourceHints[form.source]}</p>
+                <p className="text-xs leading-5 text-slate-500">{sourceHints[form.source]}</p>
                 {apifyAvailability.monthlyBudgetUsd !== undefined ? (
                   <p className="text-xs leading-5 text-slate-500">
                     Apify: US$ {(apifyAvailability.usedBudgetUsd ?? 0).toFixed(2)} de US$ {apifyAvailability.monthlyBudgetUsd.toFixed(2)} usados neste mes.
@@ -1372,11 +1372,11 @@ export function ScraperPageContent({ canSelectSource, googlePlacesEnabled }: Scr
               </div>
             ) : (
               <div className="grid gap-2 xl:col-span-3">
-                <Label>Fonte da busca</Label>
+                <Label>Motor de Prospecção</Label>
                 <div className="flex min-h-11 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
-                  Venda de Sites
+                  Apify Google Maps (WhatsApp + Instagram + Email)
                 </div>
-                <p className="text-xs leading-5 text-slate-500">A busca sera feita automaticamente pela melhor fonte disponivel.</p>
+                <p className="text-xs leading-5 text-slate-500">A busca e enriquecimento serao feitos automaticamente.</p>
               </div>
             )}
 
