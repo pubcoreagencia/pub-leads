@@ -6,11 +6,9 @@ type EvolutionConnectResponse = {
   qrcode?: {
     base64?: string;
     code?: string;
-    pairingCode?: string;
   };
   base64?: string;
   code?: string;
-  pairingCode?: string;
 };
 
 type EvolutionStatusResponse = {
@@ -38,7 +36,7 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     }),
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(45000), // Tolera cold start do Render Free
   });
 
   if (!response.ok && response.status !== 403) {
@@ -49,9 +47,8 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
   const data = (await response.json()) as EvolutionConnectResponse;
   const base64 = data.qrcode?.base64 ?? data.base64 ?? null;
   const code = data.qrcode?.code ?? data.code ?? null;
-  const pairingCode = data.qrcode?.pairingCode ?? data.pairingCode ?? null;
 
-  return { data, qrcode: base64 ? { base64, code } : null, pairingCode };
+  return { data, qrcode: base64 ? { base64, code } : null };
 }
 
 export async function getEvolutionQRCode(serverUrl: string, apiKey: string, instanceName: string) {
@@ -72,37 +69,8 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
   const data = (await response.json()) as EvolutionConnectResponse;
   const base64 = data.qrcode?.base64 ?? data.base64 ?? null;
   const code = data.qrcode?.code ?? data.code ?? null;
-  const pairingCode = data.qrcode?.pairingCode ?? data.pairingCode ?? null;
 
-  return { base64, code, pairingCode };
-}
-
-export async function getEvolutionPairingCode(
-  serverUrl: string,
-  apiKey: string,
-  instanceName: string,
-  phoneNumber: string,
-) {
-  const base = normalizeServerUrl(serverUrl);
-  const cleanPhone = phoneNumber.replace(/\D/g, "");
-  const response = await fetch(`${base}/instance/connect/${encodeURIComponent(instanceName)}?number=${cleanPhone}`, {
-    method: "GET",
-    headers: {
-      apikey: apiKey,
-    },
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Erro ao gerar código de pareamento: ${text || response.statusText}`);
-  }
-
-  const data = (await response.json()) as EvolutionConnectResponse;
-  const pairingCode = data.qrcode?.pairingCode ?? data.pairingCode ?? null;
-  const base64 = data.qrcode?.base64 ?? data.base64 ?? null;
-
-  return { pairingCode, base64 };
+  return { base64, code };
 }
 
 export async function getEvolutionInstanceStatus(serverUrl: string, apiKey: string, instanceName: string) {
