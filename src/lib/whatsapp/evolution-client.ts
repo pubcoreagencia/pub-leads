@@ -28,7 +28,6 @@ function normalizeServerUrl(url: string) {
  */
 export function normalizePhoneForEvolution(phone: string): string {
   let clean = phone.replace(/\D/g, "");
-  // Se tem 10 ou 11 dígitos (ex: 21983419000 ou 1199999999), adiciona o DDI 55 do Brasil
   if (clean.length === 10 || clean.length === 11) {
     clean = `55${clean}`;
   }
@@ -88,21 +87,50 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
 export async function getEvolutionInstanceStatus(serverUrl: string, apiKey: string, instanceName: string) {
   const base = normalizeServerUrl(serverUrl);
   try {
+    // 1. Tenta connectionState direto
     const response = await fetch(`${base}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
       method: "GET",
-      headers: {
-        apikey: apiKey,
-      },
-      signal: AbortSignal.timeout(15000),
+      headers: { apikey: apiKey },
+      signal: AbortSignal.timeout(6000),
     });
 
-    if (!response.ok) {
-      return { state: "close" };
+    if (response.ok) {
+      const data = (await response.json()) as EvolutionStatusResponse;
+      const state = (data.instance?.state ?? data.state ?? data.status ?? "").toLowerCase();
+      if (state === "open" || state === "connected") {
+        return { state: "open" };
+      }
+      if (state === "connecting") {
+        return { state: "connecting" };
+      }
     }
 
-    const data = (await response.json()) as EvolutionStatusResponse;
-    const state = (data.instance?.state ?? data.state ?? data.status ?? "close").toLowerCase();
-    return { state };
+    // 2. Fallback de alta precisão: Checa em fetchInstances
+    const fetchResp = await fetch(`${base}/instance/fetchInstances`, {
+      method: "GET",
+      headers: { apikey: apiKey },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (fetchResp.ok) {
+      const instances = (await fetchResp.json()) as Array<{
+        name?: string;
+        connectionStatus?: string;
+        ownerJid?: string;
+      }>;
+      const found = instances.find((i) => i.name === instanceName);
+      if (found) {
+        const st = (found.connectionStatus ?? "").toLowerCase();
+        if (st === "open" || st === "connected" || Boolean(found.ownerJid)) {
+          return { state: "open" };
+        }
+        if (st === "connecting") {
+          return { state: "connecting" };
+        }
+      }
+    }
+
+    return { state: "close" };
   } catch {
     return { state: "close" };
   }
