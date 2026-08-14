@@ -8,6 +8,7 @@ import {
   getEvolutionInstanceStatus,
   getEvolutionQRCode,
 } from "@/src/lib/whatsapp/evolution-client";
+import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function GET(
   _request: Request,
@@ -26,10 +27,13 @@ export async function GET(
   }
 
   try {
-    // 1. Checa status da conexão
+    // Usa credenciais globais (env vars) em vez das gravadas no banco
+    const { serverUrl, apiKey } = getEvolutionConfig();
+
+    // 1. Checa status da conexão na Evolution API
     const statusData = await getEvolutionInstanceStatus(
-      instance.server_url,
-      instance.api_key,
+      serverUrl,
+      apiKey,
       instance.instance_name,
     );
 
@@ -41,11 +45,7 @@ export async function GET(
     } else {
       // Se não estiver aberta, tenta pegar o QR code
       try {
-        qr = await getEvolutionQRCode(
-          instance.server_url,
-          instance.api_key,
-          instance.instance_name,
-        );
+        qr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
         if (qr.base64 || qr.code) {
           status = "qrcode";
         }
