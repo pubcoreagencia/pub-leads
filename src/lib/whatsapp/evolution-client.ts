@@ -77,7 +77,29 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       }),
       signal: AbortSignal.timeout(15000),
     });
-  } catch {
+
+    const webhookUrl = process.env.WEBHOOK_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}/api/webhooks/evolution` : null);
+    if (webhookUrl) {
+      await fetch(`${base}/webhook/set/${encodeURIComponent(instanceName)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: apiKey,
+        },
+        body: JSON.stringify({
+          webhook: {
+            enabled: true,
+            url: webhookUrl,
+            byEvents: false,
+            base64: false,
+            events: ["MESSAGES_UPSERT"]
+          }
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+    }
+  } catch (e) {
+    console.error("Erro ao configurar settings ou webhook:", e);
     // Ignora falha de settings, o processo principal já passou
   }
 

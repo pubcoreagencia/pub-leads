@@ -152,3 +152,31 @@ export async function deleteWhatsappInstance(userId: string, id: string): Promis
     sql: "delete from whatsapp_instances where user_id = ? and id = ?",
   });
 }
+
+export async function getWhatsappInstanceByName(instanceName: string): Promise<WhatsappInstance | null> {
+  await ensureWhatsappInstancesSchema();
+  const result = await getTursoClient().execute({
+    args: [instanceName],
+    sql: "select * from whatsapp_instances where instance_name = ?",
+  });
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    id: String(row.id),
+    user_id: String(row.user_id),
+    name: String(row.name),
+    phone: row.phone ? String(row.phone) : null,
+    server_url: String(row.server_url),
+    api_key: String(row.api_key),
+    instance_name: String(row.instance_name),
+    status: (row.status as WhatsappInstanceStatus) || "close",
+    is_active: Boolean(row.is_active),
+    qr_code: row.qr_code ? String(row.qr_code) : null,
+    warmup_completed: Boolean(row.warmup_completed),
+    warmup_progress_json: row.warmup_progress_json ? String(row.warmup_progress_json) : null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}

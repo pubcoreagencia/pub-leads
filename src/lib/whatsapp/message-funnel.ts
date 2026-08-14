@@ -195,6 +195,20 @@ export function getOperatorNameWithArticle(name: string) {
   return article ? `${article} ${trimmed}` : trimmed;
 }
 
+export function parseSpintax(text: string): string {
+  const spintaxRegex = /\{([^{}]+)\}/g;
+  let match;
+  let result = text;
+  while ((match = spintaxRegex.exec(result)) !== null) {
+    const options = match[1].split("|");
+    const choice = options[Math.floor(Math.random() * options.length)];
+    result = result.replace(match[0], choice);
+    // reset regex index to handle nested or consecutive replacements properly
+    spintaxRegex.lastIndex = 0;
+  }
+  return result;
+}
+
 export function getOperatorIntroPhrase(name: string, seed = 0) {
   const trimmed = name.trim() || "representante";
 
