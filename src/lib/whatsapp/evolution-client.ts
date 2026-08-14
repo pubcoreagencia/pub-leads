@@ -23,6 +23,18 @@ function normalizeServerUrl(url: string) {
   return url.trim().replace(/\/+$/, "");
 }
 
+/**
+ * Normaliza números de telefone do Brasil garantindo o DDI 55
+ */
+export function normalizePhoneForEvolution(phone: string): string {
+  let clean = phone.replace(/\D/g, "");
+  // Se tem 10 ou 11 dígitos (ex: 21983419000 ou 1199999999), adiciona o DDI 55 do Brasil
+  if (clean.length === 10 || clean.length === 11) {
+    clean = `55${clean}`;
+  }
+  return clean;
+}
+
 export async function createEvolutionInstance(serverUrl: string, apiKey: string, instanceName: string) {
   const base = normalizeServerUrl(serverUrl);
   const response = await fetch(`${base}/instance/create`, {
@@ -104,9 +116,9 @@ export async function sendEvolutionTextMessage(
   text: string,
 ) {
   const base = normalizeServerUrl(serverUrl);
-  const cleanPhone = phone.replace(/\D/g, "");
+  const formattedPhone = normalizePhoneForEvolution(phone);
 
-  if (!cleanPhone) {
+  if (!formattedPhone) {
     throw new Error("Número de telefone inválido.");
   }
 
@@ -117,11 +129,12 @@ export async function sendEvolutionTextMessage(
       apikey: apiKey,
     },
     body: JSON.stringify({
-      number: cleanPhone,
+      number: formattedPhone,
       text,
+      delay: 0,
       linkPreview: false,
     }),
-    signal: AbortSignal.timeout(8000), // Timeout ágil de 8s para não prender o operador
+    signal: AbortSignal.timeout(25000),
   });
 
   if (!response.ok) {
