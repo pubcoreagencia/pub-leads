@@ -7,6 +7,7 @@ import {
 import {
   createEvolutionInstance,
   getEvolutionQRCode,
+  getEvolutionPairingCode,
 } from "@/src/lib/whatsapp/evolution-client";
 import { getEvolutionConfig, hasEvolutionConfig } from "@/src/lib/whatsapp/config";
 
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name } = body as { name: string };
+    const { name, phoneNumber } = body as { name: string; phoneNumber?: string };
 
     if (!name?.trim()) {
       return NextResponse.json({ error: "O nome da instância é obrigatório." }, { status: 400 });
@@ -47,11 +48,26 @@ export async function POST(request: Request) {
     const shortUserId = user.id.replace(/-/g, "").slice(0, 8);
     const instanceName = `pub_${shortUserId}_${Date.now()}`;
 
-    // 1. Cria a instância na Evolution API (já retorna o QR Code diretamente)
-    const { qrcode: directQr } = await createEvolutionInstance(serverUrl, apiKey, instanceName);
+    // 1. Cria a instância na Evolution API
+    const createResult = await createEvolutionInstance(serverUrl, apiKey, instanceName);
 
-    let qrcode: { base64: string | null; code: string | null } | null = directQr;
-    if (!qrcode?.base64) {
+    let qrcode = createResult.qrcode;
+    let pairingCode = createResult.pairingCode;
+
+    // Se o usuário forneceu um número de telefone, gera o Pairing Code de 8 dígitos
+    if (phoneNumber?.trim()) {
+      try {
+        const pairData = await getEvolutionPairingCode(serverUrl, apiKey, instanceName, phoneNumber.trim());
+        if (pairData.pairingCode) {
+          pairingCode = pairData.pairingCode;
+        }
+        if (pairData.base64) {
+          qrcode = { base64: pairData.base64, code: null };
+        }
+      } catch {
+        // Fallback para QR code padrão
+      }
+    } else if (!qrcode?.base64) {
       try {
         qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
       } catch {
@@ -67,7 +83,7 @@ export async function POST(request: Request) {
       instance_name: instanceName,
     });
 
-    return NextResponse.json({ instance, qrcode }, { status: 201 });
+    return NextResponse.json({ instance, qrcode, pairingCode }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erro ao criar instância." },
