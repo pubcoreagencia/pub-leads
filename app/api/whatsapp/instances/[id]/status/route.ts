@@ -49,7 +49,18 @@ export async function GET(
       });
     }
 
-    // 2. Se não estiver 'open', busca o QR Code fresco da Evolution API
+    // Se estiver 'connecting', aguarda e não tenta recriar
+    if (statusData.state === "connecting") {
+      await updateWhatsappInstance(user.id, instance.id, {
+        status: "connecting",
+      });
+      return NextResponse.json({
+        instance: { ...instance, status: "connecting" },
+        qrcode: instance.qr_code ? { base64: instance.qr_code } : null,
+      });
+    }
+
+    // 2. Se não estiver 'open' nem 'connecting', busca o QR Code fresco da Evolution API
     let qr = null;
     try {
       const liveQr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
