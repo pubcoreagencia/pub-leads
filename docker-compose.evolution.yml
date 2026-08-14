@@ -1,0 +1,41 @@
+version: "3.7"
+
+services:
+  evolution-api:
+    container_name: evolution_api
+    image: atendai/evolution-api:v2.2.3
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # CONFIGURAÇÕES BÁSICAS DO SERVIDOR
+      - SERVER_URL=http://localhost:8080
+      - PORT=8080
+      - DOCKER_ENV=true
+
+      # CHAVE GLOBAL DE AUTENTICAÇÃO (Altere para sua chave secreta)
+      - AUTHENTICATION_API_KEY=PubLeadsSecretKey2026
+
+      # BANCO DE DADOS LOCAL SQLITE
+      - DATABASE_ENABLED=true
+      - DATABASE_CONNECTION_URI=sqlite:///evolution/database.sqlite
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_CHATS=true
+      - DATABASE_SAVE_MESSAGE_INSTANCE=true
+
+      # ENGINE DE CONEXÃO WHATSAPP
+      - CONFIG_SESSION_PHONE_CLIENT=PubLeads
+      - QRCODE_LIMIT=30
+
+      # LOGS
+      - LOG_LEVEL=ERROR,WARN,INFO
+      - LOG_COLOR=true
+      - LOG_BAILEYS=error
+
+    volumes:
+      - evolution_instances:/evolution/instances
+      - evolution_store:/evolution/store
+
+volumes:
+  evolution_instances:
+  evolution_store:
