@@ -38,8 +38,10 @@ export function ProspectingVfxCanvas() {
       width = canvas.width = window.innerWidth;
       height = canvas.height = window.innerHeight;
     };
-    window.addEventListener("resize", handleResize);
-
+    const particles: Particle[] = [];
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    let mouseSpeed = 0;
     let lastCreatedTime = 0;
 
     const handleMouseMove = (e: MouseEvent) => {
