@@ -27,7 +27,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Telefone e mensagem são obrigatórios." }, { status: 400 });
     }
 
-    // Carrega instâncias do usuário
     const instances = await listWhatsappInstances(user.id);
     if (instances.length === 0) {
       return NextResponse.json(
@@ -38,12 +37,10 @@ export async function POST(request: Request) {
 
     const { serverUrl, apiKey } = getEvolutionConfig();
 
-    // 1. Tenta achar uma instância com status 'open' localmente
     let instance = instanceId
       ? instances.find((i) => i.id === instanceId && i.status === "open")
       : instances.find((i) => i.status === "open");
 
-    // 2. Fallback inteligente: se não encontrou 'open', checa o status real na Evolution API
     if (!instance) {
       const candidates = instanceId ? instances.filter((i) => i.id === instanceId) : instances;
       for (const candidate of candidates) {
@@ -51,19 +48,18 @@ export async function POST(request: Request) {
           const liveStatus = await getEvolutionInstanceStatus(serverUrl, apiKey, candidate.instance_name);
           if (liveStatus.state === "open") {
             instance = { ...candidate, status: "open" };
-            // Atualiza no Turso em segundo plano
             void updateWhatsappInstance(user.id, candidate.id, { status: "open" });
             break;
           }
         } catch {
-          // Continua procurando
+          // Continua
         }
       }
     }
 
     if (!instance) {
       return NextResponse.json(
-        { error: "Nenhum WhatsApp conectado no momento. Vá em Conexões e escaneie o QR Code." },
+        { error: "Nenhum WhatsApp conectado no momento. Vá em Conexões e conecte um aparelho." },
         { status: 422 },
       );
     }
@@ -80,7 +76,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Erro ao enviar mensagem.";
     return NextResponse.json(
-      { error: msg.includes("Timeout") || msg.includes("aborted") ? "Tempo limite ao disparar WhatsApp. Verifique se o aparelho está online." : msg },
+      {
+        error: msg.includes("Timeout") || msg.includes("aborted")
+          ? "O servidor WhatsApp demorou para responder. Use o botão 'Abrir no WhatsApp Web' para envio imediato."
+          : msg,
+      },
       { status: 500 },
     );
   }
