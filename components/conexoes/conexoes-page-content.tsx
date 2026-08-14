@@ -298,14 +298,14 @@ export function ConexoesPageContent() {
           </Button>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0">
           {instances.map((instance) => {
             const isConnected = instance.status === "open";
             return (
               <Card key={instance.id} className="border-slate-200 bg-white shadow-sm flex flex-col justify-between">
-                <CardHeader className="p-4 pb-2 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
+                <CardHeader className="p-4 pb-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2 space-y-0 min-w-0">
                   <div>
-                    <CardTitle className="text-base font-bold text-slate-900">{instance.name}</CardTitle>
+                    <CardTitle className="text-base font-bold text-slate-900 break-words min-w-0">{instance.name}</CardTitle>
                     <p className="text-xs text-slate-400 font-mono mt-0.5 truncate max-w-[160px]">
                       {instance.instance_name}
                     </p>
