@@ -40,10 +40,7 @@ export function ProspectingVfxCanvas() {
     };
     window.addEventListener("resize", handleResize);
 
-    const particles: Particle[] = [];
-    let lastMouseX = 0;
-    let lastMouseY = 0;
-    let mouseSpeed = 0;
+    let lastCreatedTime = 0;
 
     const handleMouseMove = (e: MouseEvent) => {
       const dx = e.clientX - lastMouseX;
@@ -52,30 +49,33 @@ export function ProspectingVfxCanvas() {
       lastMouseX = e.clientX;
       lastMouseY = e.clientY;
 
-      // Cria envelopes voando conforme o mouse se move
-      const count = Math.min(Math.floor(mouseSpeed / 4) + 1, 3);
-      for (let i = 0; i < count; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 2 + 0.8;
-        const particleTypes: Particle["type"][] = ["envelope", "envelope", "sparkle", "whatsapp"];
-        const chosenType = particleTypes[Math.floor(Math.random() * particleTypes.length)];
-
-        particles.push({
-          x: e.clientX + (Math.random() - 0.5) * 10,
-          y: e.clientY + (Math.random() - 0.5) * 10,
-          vx: Math.cos(angle) * speed + (dx * 0.08),
-          vy: Math.sin(angle) * speed + (dy * 0.08) - 1.2, // flutua para cima
-          size: Math.random() * 6 + 14,
-          rotation: (Math.random() - 0.5) * 0.8,
-          vRot: (Math.random() - 0.5) * 0.08,
-          opacity: 1,
-          scale: Math.random() * 0.4 + 0.8,
-          type: chosenType,
-        });
+      const now = performance.now();
+      // Throttle: gera no máximo 1 partícula a cada 65ms ou se o movimento for nítido
+      if (now - lastCreatedTime < 65 || mouseSpeed < 6) {
+        return;
       }
+      lastCreatedTime = now;
 
-      if (particles.length > 70) {
-        particles.splice(0, particles.length - 70);
+      const angle = (Math.random() - 0.5) * 1.5;
+      const speed = Math.random() * 1.2 + 0.4;
+      const particleTypes: Particle["type"][] = ["envelope", "sparkle", "envelope"];
+      const chosenType = particleTypes[Math.floor(Math.random() * particleTypes.length)];
+
+      particles.push({
+        x: e.clientX,
+        y: e.clientY,
+        vx: Math.sin(angle) * speed + (dx * 0.03),
+        vy: -Math.abs(Math.cos(angle) * speed) - 0.8, // flutua suavemente para cima
+        size: Math.random() * 4 + 11, // tamanho mais compacto
+        rotation: (Math.random() - 0.5) * 0.5,
+        vRot: (Math.random() - 0.5) * 0.05,
+        opacity: 0.85,
+        scale: Math.random() * 0.3 + 0.7,
+        type: chosenType,
+      });
+
+      if (particles.length > 25) {
+        particles.splice(0, particles.length - 25);
       }
     };
 
@@ -183,8 +183,8 @@ export function ProspectingVfxCanvas() {
         p.x += p.vx;
         p.y += p.vy;
         p.rotation += p.vRot;
-        p.opacity -= 0.016; // some suavemente
-        p.vy -= 0.02; // acelera suavemente para cima (voo)
+        p.opacity -= 0.028; // fade out mais rápido
+        p.vy -= 0.015; // flutuação suave
 
         if (p.opacity <= 0) {
           particles.splice(i, 1);

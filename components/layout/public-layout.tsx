@@ -12,23 +12,25 @@ export function PublicLayout({ children }: Readonly<{ children: ReactNode }>) {
       <Suspense fallback={null}>
         <UtmCapture />
       </Suspense>
-      <header className="sticky top-0 z-40 border-b border-slate-100 bg-white/80 backdrop-blur-md">
+      <header className="sticky top-0 z-40 border-b border-red-950/40 bg-[linear-gradient(180deg,#140204_0%,#09090b_100%)] shadow-lg backdrop-blur-md">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-          <Link className="flex items-center gap-3" href="/">
-            <Image
-              alt="PubLeads Logo"
-              className="h-10 w-auto object-contain transition-transform hover:scale-105"
-              height={48}
-              priority
-              src="/brand/publeads-logo.png"
-              width={160}
-            />
+          <Link className="flex items-center gap-3 group" href="/">
+            <div className="p-2 rounded-xl bg-white/5 border border-white/10 group-hover:border-red-500/30 transition shadow-inner">
+              <Image
+                alt="PubLeads Logo"
+                className="h-9 w-auto object-contain transition-transform group-hover:scale-105"
+                height={48}
+                priority
+                src="/brand/publeads-logo.png"
+                width={160}
+              />
+            </div>
           </Link>
           <nav className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <Button asChild size="sm" variant="ghost" className="font-semibold text-slate-700 hover:text-red-600">
+            <Button asChild size="sm" variant="ghost" className="font-semibold text-slate-300 hover:text-white hover:bg-white/10">
               <Link href="/login">Entrar</Link>
             </Button>
-            <Button asChild className="px-4 bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-500/20" size="sm">
+            <Button asChild className="px-4 bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-600/30" size="sm">
               <Link href="/register">Começar Agora</Link>
             </Button>
           </nav>
