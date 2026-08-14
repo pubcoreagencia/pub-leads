@@ -364,6 +364,19 @@ function resultToLeadInput(result: ScrapingSessionLead): LeadWriteInput {
       : result.rawData,
   });
 
+  // Usa o whatsapp enriquecido via website scraping se disponível,
+  // senão usa o número normalizado detectado pela qualificação (mobile confirmado/possível)
+  const qualifiedWhatsapp =
+    qualified.qualification.whatsapp_status === "confirmed" ||
+    qualified.qualification.whatsapp_status === "possible"
+      ? (qualified.qualification.normalized_whatsapp ?? null)
+      : null;
+
+  const whatsapp =
+    (typeof result.rawData?.enriched_whatsapp === "string" ? result.rawData.enriched_whatsapp : null) ??
+    qualifiedWhatsapp ??
+    null;
+
   return {
     address: result.address ?? null,
     business_name: result.businessName ?? null,
@@ -391,8 +404,10 @@ function resultToLeadInput(result: ScrapingSessionLead): LeadWriteInput {
     state: result.state,
     status: "new",
     website: result.website ?? null,
+    whatsapp,
   };
 }
+
 
 async function refreshSessionCounts(userId: string, sessionId: string) {
   await ensureScrapingSessionSchema();

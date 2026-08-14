@@ -7,6 +7,7 @@ import {
   mapApifyGoogleSearchItem,
   mapApifyInstagramItem,
 } from "@/src/lib/apify/mappers";
+import { enrichSessionResultsFromWebsite } from "@/src/lib/lead-sources/enrichment-pipeline";
 import { getApifyRunByRunId, updateApifyRun } from "@/src/lib/turso/apify-runs-repository";
 import { updateScrapingSession, upsertScrapingSessionResults } from "@/src/lib/turso/scraping-sessions-repository";
 
@@ -48,7 +49,19 @@ export async function POST(_request: Request, context: { params: Promise<{ runId
       status: "completed",
     });
     sessionPayload = { results, session };
+
+    // Dispara enriquecimento automático de WhatsApp/Instagram/Email via scraping de website
+    const resultIds = results
+      .filter((r) => r.website)
+      .map((r) => r.sessionResultId)
+      .filter(Boolean);
+
+    if (resultIds.length > 0) {
+      // fire-and-forget — não bloqueia a resposta ao usuário
+      enrichSessionResultsFromWebsite(user.id, sessionId, resultIds).catch(() => {});
+    }
   }
   await updateApifyRun(user.id, runId, { results_count: leads.length, status: "succeeded" });
   return NextResponse.json({ results: sessionPayload?.results ?? leads, session: sessionPayload?.session ?? null });
 }
+
