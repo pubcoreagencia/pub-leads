@@ -8,6 +8,7 @@ import {
   createEvolutionInstance,
   getEvolutionQRCode,
 } from "@/src/lib/whatsapp/evolution-client";
+import { getEvolutionConfig, hasEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function GET() {
   const supabase = await createClient();
@@ -27,38 +28,57 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
+  // Verifica se a Evolution API está configurada no servidor
+  if (!hasEvolutionConfig()) {
+    return NextResponse.json(
+      { error: "Evolution API não configurada no servidor. Contate o administrador." },
+      { status: 503 },
+    );
+  }
+
   try {
     const body = await request.json();
-    const { name, serverUrl, apiKey } = body;
+    const { name } = body as { name: string };
 
-    if (!name || !serverUrl || !apiKey) {
-      return NextResponse.json({ error: "Nome, URL do servidor e API Key são obrigatórios." }, { status: 400 });
+    if (!name?.trim()) {
+      return NextResponse.json({ error: "O nome da instância é obrigatório." }, { status: 400 });
     }
 
-    // Gera um identificador único para a Evolution API
-    const instanceName = `pub_${user.id.slice(0, 8)}_${Date.now()}`;
+    // Lê credenciais globais do servidor (env vars)
+    const { serverUrl, apiKey } = getEvolutionConfig();
 
-    // Cria no servidor da Evolution API
+    // Gera um nome único para a instância na Evolution API
+    // Formato: publeads_{primeiros 8 chars do userId}_{timestamp}
+    const shortUserId = user.id.replace(/-/g, "").slice(0, 8);
+    const instanceName = `pl_${shortUserId}_${Date.now()}`;
+
+    // 1. Cria a instância na Evolution API
     await createEvolutionInstance(serverUrl, apiKey, instanceName);
 
-    // Salva no banco Turso
-    const instance = await createWhatsappInstance(user.id, {
-      name,
-      server_url: serverUrl,
-      api_key: apiKey,
-      instance_name: instanceName,
-    });
-
-    // Tenta obter o QR code inicial
-    let qr = null;
+    // 2. Busca o QR Code
+    let qrcode = null;
     try {
-      qr = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
+      qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
     } catch {
-      // O QR Code pode ser obtido depois se demorar
+      // QR Code pode não estar disponível imediatamente — tudo bem
     }
 
-    return NextResponse.json({ instance, qrcode: qr });
+    // 3. Persiste no Turso (armazena server_url e api_key para compatibilidade futura)
+    const instance = await createWhatsappInstance({
+      userId: user.id,
+      name: name.trim(),
+      serverUrl,
+      apiKey,
+      instanceName,
+      status: qrcode?.base64 ? "qrcode" : "close",
+      qrCode: qrcode?.base64 ?? null,
+    });
+
+    return NextResponse.json({ instance, qrcode }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Erro ao criar instância de WhatsApp." }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Erro ao criar instância." },
+      { status: 500 },
+    );
   }
 }
