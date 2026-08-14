@@ -111,7 +111,6 @@ export function ConexoesPageContent() {
               description: `A instância "${instance.name}" foi conectada com sucesso.`,
               variant: "success",
             });
-            // Recarrega lista
             const res = await fetch("/api/whatsapp/instances");
             const d = await res.json() as { instances?: WhatsappInstance[] };
             if (d.instances) setInstances(d.instances);
