@@ -55,7 +55,7 @@ export function ConexoesPageContent() {
   }, []);
 
   const checkStatus = useCallback(
-    async (instance: WhatsappInstance, refresh = false): Promise<"open" | "connecting" | "qrcode" | "close"> => {
+    async (instance: WhatsappInstance, refresh = false): Promise<"open" | "qrcode"> => {
       const url = `/api/whatsapp/instances/${instance.id}/status${refresh ? "?refresh=true" : ""}`;
       const res = await fetch(url);
       const data = await res.json() as {
@@ -76,11 +76,8 @@ export function ConexoesPageContent() {
         if (data.instance.status === "open") {
           return "open";
         }
-        if (data.instance.status === "connecting") {
-          return "connecting";
-        }
       }
-      return "close";
+      return "qrcode";
     },
     [],
   );
@@ -96,7 +93,7 @@ export function ConexoesPageContent() {
           stopPolling();
           toast({
             title: "QR Code expirou",
-            description: "Clique em 'Escanear QR Code' para gerar um novo.",
+            description: "Clique em 'Escanear QR Code' para gerar um novo código.",
             variant: "error",
           });
           return;
@@ -113,7 +110,7 @@ export function ConexoesPageContent() {
               description: `A instância "${instance.name}" foi conectada com sucesso.`,
               variant: "success",
             });
-            // Recarrega a lista de instâncias
+            // Recarrega lista completa
             const res = await fetch("/api/whatsapp/instances");
             const d = await res.json() as { instances?: WhatsappInstance[] };
             if (d.instances) setInstances(d.instances);
@@ -325,7 +322,7 @@ export function ConexoesPageContent() {
                     ) : (
                       <XCircle className="h-3 w-3" />
                     )}
-                    {isConnected ? "Conectado" : instance.status === "connecting" ? "Conectando..." : "Aguardando QR"}
+                    {isConnected ? "Conectado" : "Aguardando QR"}
                   </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-3 space-y-3">
@@ -509,8 +506,8 @@ export function ConexoesPageContent() {
                         void loadInstances();
                       } else {
                         toast({
-                          title: "Ainda conectando...",
-                          description: "O WhatsApp está finalizando a sincronização. Aguarde alguns segundos.",
+                          title: "Aguardando leitura",
+                          description: "Escaneie o QR Code acima com o WhatsApp.",
                           variant: "error",
                         });
                       }
