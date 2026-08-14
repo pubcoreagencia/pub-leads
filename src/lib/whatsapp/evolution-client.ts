@@ -36,6 +36,7 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     }),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok && response.status !== 403) {
@@ -53,6 +54,7 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
     headers: {
       apikey: apiKey,
     },
+    signal: AbortSignal.timeout(10000),
   });
 
   if (!response.ok) {
@@ -69,20 +71,25 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
 
 export async function getEvolutionInstanceStatus(serverUrl: string, apiKey: string, instanceName: string) {
   const base = normalizeServerUrl(serverUrl);
-  const response = await fetch(`${base}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
-    method: "GET",
-    headers: {
-      apikey: apiKey,
-    },
-  });
+  try {
+    const response = await fetch(`${base}/instance/connectionState/${encodeURIComponent(instanceName)}`, {
+      method: "GET",
+      headers: {
+        apikey: apiKey,
+      },
+      signal: AbortSignal.timeout(8000),
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return { state: "close" };
+    }
+
+    const data = (await response.json()) as EvolutionStatusResponse;
+    const state = (data.instance?.state ?? data.state ?? data.status ?? "close").toLowerCase();
+    return { state };
+  } catch {
     return { state: "close" };
   }
-
-  const data = (await response.json()) as EvolutionStatusResponse;
-  const state = (data.instance?.state ?? data.state ?? data.status ?? "close").toLowerCase();
-  return { state };
 }
 
 export async function sendEvolutionTextMessage(
@@ -93,8 +100,12 @@ export async function sendEvolutionTextMessage(
   text: string,
 ) {
   const base = normalizeServerUrl(serverUrl);
-  // Formata o número (ex: 5511999998888)
+  // Formata o número (apenas dígitos, ex: 5511999998888)
   const cleanPhone = phone.replace(/\D/g, "");
+
+  if (!cleanPhone) {
+    throw new Error("Número de telefone inválido.");
+  }
 
   const response = await fetch(`${base}/message/sendText/${encodeURIComponent(instanceName)}`, {
     method: "POST",
@@ -105,9 +116,9 @@ export async function sendEvolutionTextMessage(
     body: JSON.stringify({
       number: cleanPhone,
       text,
-      delay: 1200,
-      linkPreview: true,
+      linkPreview: false,
     }),
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) {
@@ -126,6 +137,7 @@ export async function deleteEvolutionInstance(serverUrl: string, apiKey: string,
       headers: {
         apikey: apiKey,
       },
+      signal: AbortSignal.timeout(10000),
     });
   } catch {
     // Ignora se já tiver sido removida
