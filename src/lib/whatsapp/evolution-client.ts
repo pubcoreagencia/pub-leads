@@ -46,12 +46,6 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       instanceName,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
-      reject_call: true,
-      groupsIgnore: true,
-      alwaysOnline: true,
-      readMessages: false,
-      readStatus: false,
-      syncFullHistory: false,
     }),
     signal: AbortSignal.timeout(45000),
   });
@@ -64,6 +58,28 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
   const data = (await response.json()) as EvolutionConnectResponse;
   const base64 = data.qrcode?.base64 ?? data.base64 ?? null;
   const code = data.qrcode?.code ?? data.code ?? null;
+
+  // Aplica as configurações ultra-leves na Evolution API para não travar o servidor durante o connecting
+  try {
+    await fetch(`${base}/settings/set/${encodeURIComponent(instanceName)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: apiKey,
+      },
+      body: JSON.stringify({
+        rejectCall: true,
+        groupsIgnore: true,
+        alwaysOnline: true,
+        readMessages: false,
+        readStatus: false,
+        syncFullHistory: false,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    // Ignora falha de settings, o processo principal já passou
+  }
 
   return { data, qrcode: base64 ? { base64, code } : null };
 }
