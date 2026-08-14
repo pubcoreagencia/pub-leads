@@ -10,6 +10,8 @@ import {
 } from "@/src/lib/whatsapp/evolution-client";
 import { getEvolutionConfig, hasEvolutionConfig } from "@/src/lib/whatsapp/config";
 
+export const maxDuration = 45;
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -28,7 +30,6 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  // Verifica se a Evolution API está configurada no servidor
   if (!hasEvolutionConfig()) {
     return NextResponse.json(
       { error: "Evolution API não configurada no servidor. Contate o administrador." },
@@ -44,25 +45,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "O nome da instância é obrigatório." }, { status: 400 });
     }
 
-    // Lê credenciais globais do servidor (env vars)
     const { serverUrl, apiKey } = getEvolutionConfig();
-
-    // Gera um nome único para a instância na Evolution API
     const shortUserId = user.id.replace(/-/g, "").slice(0, 8);
     const instanceName = `pub_${shortUserId}_${Date.now()}`;
 
-    // 1. Cria a instância na Evolution API
-    await createEvolutionInstance(serverUrl, apiKey, instanceName);
+    // 1. Cria a instância na Evolution API (já retorna o QR Code diretamente)
+    const { qrcode: directQr } = await createEvolutionInstance(serverUrl, apiKey, instanceName);
 
-    // 2. Busca o QR Code
-    let qrcode = null;
-    try {
-      qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
-    } catch {
-      // QR Code pode ser obtido depois na checagem de status
+    let qrcode = directQr;
+    // Se não veio de primeira, tenta um fallback rápido
+    if (!qrcode?.base64) {
+      try {
+        qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
+      } catch {
+        // Pode ser pego na checagem de status
+      }
     }
 
-    // 3. Persiste no Turso com a assinatura correta (userId, data)
+    // 2. Persiste no Turso
     const instance = await createWhatsappInstance(user.id, {
       name: name.trim(),
       server_url: serverUrl,
