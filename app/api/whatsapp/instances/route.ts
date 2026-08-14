@@ -28,27 +28,20 @@ export async function POST(request: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  if (!hasEvolutionConfig()) {
-    return NextResponse.json(
-      { error: "Evolution API não configurada no servidor. Contate o administrador." },
-      { status: 503 },
-    );
-  }
-
   try {
-    const body = await request.json();
-    const { name } = body as { name: string };
+    const { name, proxy } = await request.json();
+    if (!name) return NextResponse.json({ error: "Nome é obrigatório." }, { status: 400 });
 
-    if (!name?.trim()) {
-      return NextResponse.json({ error: "O nome da instância é obrigatório." }, { status: 400 });
+    if (!hasEvolutionConfig()) {
+      return NextResponse.json({ error: "Evolution API não configurada. Defina as variáveis de ambiente." }, { status: 500 });
     }
 
     const { serverUrl, apiKey } = getEvolutionConfig();
     const shortUserId = user.id.replace(/-/g, "").slice(0, 8);
     const instanceName = `pub_${shortUserId}_${Date.now()}`;
 
-    // 1. Cria a instância na Evolution API (já retorna o QR Code diretamente)
-    const { qrcode: directQr } = await createEvolutionInstance(serverUrl, apiKey, instanceName);
+    // Cria a instância na Evolution API (passando proxy se fornecido)
+    const { qrcode: directQr } = await createEvolutionInstance(serverUrl, apiKey, instanceName, proxy);
 
     let qrcode: { base64: string | null; code: string | null } | null = directQr;
     if (!qrcode?.base64) {

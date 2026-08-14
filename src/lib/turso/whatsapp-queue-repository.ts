@@ -120,6 +120,22 @@ export async function updateQueueItemStatus(
   });
 }
 
+export async function getLastScheduledTime(userId: string): Promise<Date> {
+  await ensureWhatsappQueueSchema();
+  const result = await getTursoClient().execute({
+    args: [userId],
+    sql: "select max(scheduled_at) as last_time from whatsapp_campaign_queue where user_id = ? and status = 'pending'",
+  });
+
+  const now = new Date();
+  if (result.rows.length === 0 || !result.rows[0].last_time) {
+    return now;
+  }
+
+  const lastTime = new Date(String(result.rows[0].last_time));
+  return lastTime > now ? lastTime : now;
+}
+
 export async function cancelPendingQueueForLead(leadId: string): Promise<void> {
   await ensureWhatsappQueueSchema();
   await getTursoClient().execute({

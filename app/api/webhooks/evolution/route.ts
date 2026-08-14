@@ -52,8 +52,16 @@ export async function POST(request: Request) {
     if (lead) {
       console.log(`Lead replied! Lead ID: ${lead.id}`);
       
-      // Update lead status to "responded"
-      await updateLeadsStatus(instance.user_id, [lead.id], "responded");
+      const messageText = String(msgData.message?.conversation || msgData.message?.extendedTextMessage?.text || "").toLowerCase().trim();
+      const isFakeBlock = messageText === "1" || messageText.includes("sair");
+
+      if (isFakeBlock) {
+        await updateLeadsStatus(instance.user_id, [lead.id], "lost");
+        console.log(`Lead ${lead.id} opted out (fake block).`);
+      } else {
+        // Update lead status to "responded"
+        await updateLeadsStatus(instance.user_id, [lead.id], "responded");
+      }
 
       // Cancel any pending automated messages for this lead
       await cancelPendingQueueForLead(lead.id);

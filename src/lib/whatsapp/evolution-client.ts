@@ -34,19 +34,30 @@ export function normalizePhoneForEvolution(phone: string): string {
   return clean;
 }
 
-export async function createEvolutionInstance(serverUrl: string, apiKey: string, instanceName: string) {
+export async function createEvolutionInstance(
+  serverUrl: string, 
+  apiKey: string, 
+  instanceName: string,
+  proxy?: { host: string; port: number; protocol: string; username?: string; password?: string; }
+) {
   const base = normalizeServerUrl(serverUrl);
+  
+  const body: any = {
+    instanceName,
+    qrcode: true,
+    integration: "WHATSAPP-BAILEYS",
+  };
+  if (proxy) {
+    body.proxy = proxy;
+  }
+
   const response = await fetch(`${base}/instance/create`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: apiKey,
     },
-    body: JSON.stringify({
-      instanceName,
-      qrcode: true,
-      integration: "WHATSAPP-BAILEYS",
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(45000),
   });
 
@@ -126,6 +137,31 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
   const code = data.qrcode?.code ?? data.code ?? null;
 
   return { base64, code };
+}
+
+export async function getEvolutionPairingCode(serverUrl: string, apiKey: string, instanceName: string, phone: string) {
+  const base = normalizeServerUrl(serverUrl);
+  const formattedPhone = normalizePhoneForEvolution(phone);
+  
+  const response = await fetch(`${base}/instance/connect/${encodeURIComponent(instanceName)}?number=${formattedPhone}`, {
+    method: "GET",
+    headers: {
+      apikey: apiKey,
+    },
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Erro ao obter Pairing Code da Evolution API: ${text || response.statusText}`);
+  }
+
+  const data = (await response.json()) as { code?: string };
+  if (!data.code) {
+    throw new Error("Evolution API did not return a pairing code. Ensure the instance is ready and number is correct.");
+  }
+
+  return { code: data.code };
 }
 
 export async function getEvolutionInstanceStatus(serverUrl: string, apiKey: string, instanceName: string) {

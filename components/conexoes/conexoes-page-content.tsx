@@ -54,10 +54,17 @@ export function ConexoesPageContent() {
 
   // Form state
   const [name, setName] = useState("");
+  const [connectionMode, setConnectionMode] = useState<"qr" | "pairing">("qr");
+  const [pairingPhone, setPairingPhone] = useState("");
+  const [proxyHost, setProxyHost] = useState("");
+  const [proxyPort, setProxyPort] = useState("");
+  const [proxyUser, setProxyUser] = useState("");
+  const [proxyPass, setProxyPass] = useState("");
 
   // QR Code state
   const [activeQrInstance, setActiveQrInstance] = useState<WhatsappInstance | null>(null);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
+  const [pairingCodeData, setPairingCodeData] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -181,10 +188,18 @@ export function ConexoesPageContent() {
 
     setIsCreating(true);
     try {
+      const proxyPayload = proxyHost ? {
+        host: proxyHost.trim(),
+        port: parseInt(proxyPort.trim(), 10),
+        protocol: "socks5",
+        username: proxyUser.trim() || undefined,
+        password: proxyPass.trim() || undefined,
+      } : undefined;
+
       const res = await fetch("/api/whatsapp/instances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), proxy: proxyPayload }),
       });
       const data = await res.json() as {
         instance?: WhatsappInstance;
@@ -209,9 +224,30 @@ export function ConexoesPageContent() {
       setName("");
       await loadInstances();
 
-      if (data.instance && data.qrcode?.base64) {
+      if (data.instance) {
         setActiveQrInstance(data.instance);
-        setQrCodeData(data.qrcode.base64);
+        
+        if (connectionMode === "pairing" && pairingPhone.trim()) {
+          // Fetch pairing code
+          try {
+            const pairRes = await fetch(`/api/whatsapp/instances/${data.instance.id}/pairing-code`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ phone: pairingPhone.trim() })
+            });
+            const pairData = await pairRes.json();
+            if (pairData.code) {
+              setPairingCodeData(pairData.code);
+            } else {
+              throw new Error(pairData.error || "Falha ao gerar código");
+            }
+          } catch (e: any) {
+            toast({ title: "Aviso", description: "Instância criada, mas falhou ao gerar Pairing Code. Tente via QR.", variant: "error" });
+          }
+        } else if (data.qrcode?.base64) {
+          setQrCodeData(data.qrcode.base64);
+        }
+        
         startPolling(data.instance);
       }
     } catch (err) {
@@ -270,6 +306,7 @@ export function ConexoesPageContent() {
     stopPolling();
     setActiveQrInstance(null);
     setQrCodeData(null);
+    setPairingCodeData(null);
   }
 
   // ─── Maturador (Warm-up) ──────────────────────────────────────────────────
@@ -517,6 +554,35 @@ export function ConexoesPageContent() {
                     Este nome aparece na lista de conexões.
                   </p>
                 </div>
+                
+                <div className="space-y-1.5 pt-2">
+                  <Label className="text-xs font-semibold text-slate-700">Modo de Conexão</Label>
+                  <div className="flex gap-2">
+                    <Button type="button" variant={connectionMode === "qr" ? "default" : "outline"} onClick={() => setConnectionMode("qr")} className={`flex-1 text-xs h-8 ${connectionMode === "qr" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}>QR Code</Button>
+                    <Button type="button" variant={connectionMode === "pairing" ? "default" : "outline"} onClick={() => setConnectionMode("pairing")} className={`flex-1 text-xs h-8 ${connectionMode === "pairing" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}>Pairing Code</Button>
+                  </div>
+                </div>
+
+                {connectionMode === "pairing" && (
+                  <div className="space-y-1.5 pt-1">
+                    <Label htmlFor="pairing-phone" className="text-xs font-semibold text-slate-700">Número do WhatsApp (com DDD)</Label>
+                    <Input id="pairing-phone" required placeholder="Ex: 11999999999" value={pairingPhone} onChange={(e) => setPairingPhone(e.target.value)} />
+                  </div>
+                )}
+
+                <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                  <Label className="text-xs font-semibold text-slate-700">Proxy SOCKS5 (Opcional)</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input className="col-span-2" placeholder="IP/Host" value={proxyHost} onChange={(e) => setProxyHost(e.target.value)} />
+                    <Input placeholder="Porta" value={proxyPort} onChange={(e) => setProxyPort(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Input placeholder="Usuário (opcional)" value={proxyUser} onChange={(e) => setProxyUser(e.target.value)} />
+                    <Input type="password" placeholder="Senha (opcional)" value={proxyPass} onChange={(e) => setProxyPass(e.target.value)} />
+                  </div>
+                </div>
+
+
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button
                     type="button"
@@ -542,12 +608,12 @@ export function ConexoesPageContent() {
       ) : null}
 
       {/* MODAL QR CODE COM AUTO-DETECT */}
-      {activeQrInstance && qrCodeData ? (
+      {activeQrInstance && (qrCodeData || pairingCodeData) ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-sm border-slate-200 bg-white shadow-2xl">
             <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900">Escanear QR Code</CardTitle>
+                <CardTitle className="text-lg font-bold text-slate-900">{pairingCodeData ? "Código de Pareamento" : "Escanear QR Code"}</CardTitle>
                 <p className="text-xs text-slate-500 mt-0.5">{activeQrInstance.name}</p>
               </div>
               <button
@@ -561,20 +627,29 @@ export function ConexoesPageContent() {
             <CardContent className="p-5 space-y-4 text-center">
               <p className="text-xs text-slate-500">
                 Abra o WhatsApp no celular &gt; <strong>Aparelhos conectados</strong> &gt;{" "}
-                <strong>Conectar aparelho</strong> e escaneie o código.
+                <strong>{pairingCodeData ? "Conectar com Número de Telefone" : "Conectar aparelho"}</strong>.
               </p>
-              <div className="flex justify-center rounded-xl bg-slate-50 p-3 border border-slate-100">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={
-                    qrCodeData.startsWith("data:")
-                      ? qrCodeData
-                      : `data:image/png;base64,${qrCodeData}`
-                  }
-                  alt="QR Code WhatsApp"
-                  className="h-56 w-56 rounded"
-                />
-              </div>
+              
+              {pairingCodeData ? (
+                <div className="flex justify-center items-center rounded-xl bg-slate-50 p-6 border border-slate-200">
+                  <span className="text-4xl font-mono font-bold tracking-widest text-slate-800">{pairingCodeData}</span>
+                </div>
+              ) : (
+                qrCodeData && (
+                  <div className="flex justify-center rounded-xl bg-slate-50 p-3 border border-slate-100">
+                    <img
+                      src={
+                        qrCodeData.startsWith("data:")
+                          ? qrCodeData
+                          : `data:image/png;base64,${qrCodeData}`
+                      }
+                      alt="QR Code WhatsApp"
+                      className="h-56 w-56 rounded"
+                    />
+                  </div>
+                )
+              )}
+
 
               {isPolling ? (
                 <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium animate-pulse">

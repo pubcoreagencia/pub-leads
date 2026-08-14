@@ -73,7 +73,12 @@ export async function GET(request: Request) {
         }
 
         // Parse spintax in the message content
-        const finalMessage = parseSpintax(item.message_content);
+        let finalMessage = parseSpintax(item.message_content);
+        
+        // Add fake block / opt-out text
+        if (!finalMessage.toLowerCase().includes("sair")) {
+          finalMessage += "\n\n*[1] Sair da lista*";
+        }
 
         // Send via Evolution API
         await sendEvolutionTextMessage(serverUrl, apiKey, instanceName, phone, finalMessage);
