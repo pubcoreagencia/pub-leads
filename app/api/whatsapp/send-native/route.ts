@@ -10,9 +10,6 @@ import {
 } from "@/src/lib/whatsapp/evolution-client";
 import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
-// Permite até 30s para a execução da serverless function na Vercel
-export const maxDuration = 30;
-
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
