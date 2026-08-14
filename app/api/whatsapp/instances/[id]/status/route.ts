@@ -11,7 +11,7 @@ import {
 import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function GET(
-  request: Request,
+  _request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
@@ -26,9 +26,6 @@ export async function GET(
     return NextResponse.json({ error: "Instância não encontrada." }, { status: 404 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const refreshQr = searchParams.get("refresh") === "true";
-
   try {
     const { serverUrl, apiKey } = getEvolutionConfig();
 
@@ -39,7 +36,7 @@ export async function GET(
       instance.instance_name,
     );
 
-    // Se estiver 'open', o WhatsApp foi conectado com sucesso!
+    // Se estiver 'open', o WhatsApp conectou!
     if (statusData.state === "open") {
       await updateWhatsappInstance(user.id, instance.id, {
         status: "open",
@@ -51,28 +48,24 @@ export async function GET(
       });
     }
 
-    // Se não estiver 'open', a instância ainda está aguardando escaneamento
-    let qr = instance.qr_code ? { base64: instance.qr_code } : null;
-
-    // Se o QR expirou ou foi solicitado um novo explicitamente via refresh
-    if (refreshQr || !qr) {
-      try {
-        const newQr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
-        if (newQr.base64) {
-          qr = { base64: newQr.base64 };
-          await updateWhatsappInstance(user.id, instance.id, {
-            status: "qrcode",
-            qr_code: newQr.base64,
-          });
-        }
-      } catch {
-        // Mantém o estado atual se falhar
+    // 2. Se não estiver 'open', busca o QR Code fresco mais recente da sessão
+    let qr = null;
+    try {
+      const liveQr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
+      if (liveQr.base64) {
+        qr = liveQr;
+        await updateWhatsappInstance(user.id, instance.id, {
+          status: "qrcode",
+          qr_code: liveQr.base64,
+        });
       }
+    } catch {
+      qr = instance.qr_code ? { base64: instance.qr_code } : null;
     }
 
     return NextResponse.json({
-      instance: { ...instance, status: "qrcode", qr_code: qr?.base64 ?? null },
-      qrcode: qr,
+      instance: { ...instance, status: "qrcode", qr_code: qr?.base64 ?? instance.qr_code },
+      qrcode: qr ?? (instance.qr_code ? { base64: instance.qr_code } : null),
     });
   } catch (error) {
     return NextResponse.json({
