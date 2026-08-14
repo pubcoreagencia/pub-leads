@@ -511,6 +511,7 @@ export function ConexoesPageContent() {
                         toast({
                           title: "Ainda conectando...",
                           description: "O WhatsApp está finalizando a sincronização. Aguarde alguns segundos.",
+                          variant: "error",
                         });
                       }
                     } catch {
