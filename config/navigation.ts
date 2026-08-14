@@ -23,6 +23,7 @@ export const dashboardNavItems: DashboardNavItem[] = [
   { title: "Leads", href: "/app/leads", icon: Users },
   { title: "Pipeline", href: "/app/pipeline", icon: KanbanSquare },
   { title: "Abordagem", href: "/app/whatsapp", icon: MessageCircle },
+  { title: "Conexões WhatsApp", href: "/app/conexoes", icon: Settings },
   { title: "Analytics", href: "/app/analytics", icon: BarChart3 },
   { title: "Assinatura", href: "/app/billing", icon: CreditCard },
   { title: "Planos", href: "/app/planos", icon: BadgeDollarSign },

@@ -590,6 +590,49 @@ export function WhatsAppPageContent() {
     }
   }
 
+  async function handleSendNativeWhatsApp() {
+    const phone = getLeadPhone(selectedLead);
+    if (!phone || !message) {
+      toast({ title: "Dados incompletos", description: "Telefone ou mensagem ausentes.", variant: "error" });
+      return;
+    }
+
+    setIsActing(true);
+    try {
+      const res = await fetch("/api/whatsapp/send-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, message }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Se der erro de instância desconectada, sugere o WhatsApp Web
+        if (data.error?.includes("Nenhum WhatsApp conectado")) {
+          toast({
+            title: "Instância desconectada",
+            description: "Abrindo pelo WhatsApp Web como alternativa...",
+            variant: "error",
+          });
+          await handleOpenWhatsApp();
+          return;
+        }
+        throw new Error(data.error || "Erro ao enviar mensagem.");
+      }
+
+      await recordEvent("marked_sent");
+      toast({ title: "Mensagem enviada!", description: "Disparo realizado diretamente pelo WhatsApp nativo.", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Falha no envio nativo",
+        description: err instanceof Error ? err.message : "Tente pelo WhatsApp Web.",
+        variant: "error",
+      });
+    } finally {
+      setIsActing(false);
+    }
+  }
+
   async function handleOpenWhatsApp() {
     if (!workspaceWaLink) {
       toast({
@@ -1151,23 +1194,23 @@ export function WhatsAppPageContent() {
                   <div className="grid gap-3 sm:grid-cols-2 pt-2">
                     <Button
                       className="h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2"
-                      disabled={!message || !workspaceWaLink || isActing}
-                      onClick={handleOpenWhatsApp}
+                      disabled={!message || !getLeadPhone(selectedLead) || isActing}
+                      onClick={handleSendNativeWhatsApp}
                       type="button"
                     >
-                      <MessageCircle className="h-5 w-5" />
-                      {usesMobileWhatsappApp ? "Abrir no WhatsApp" : "Enviar no WhatsApp Web"}
+                      {isActing ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
+                      Disparar Mensagem Nativa
                     </Button>
 
                     <Button
                       className="h-12 text-sm font-semibold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-2"
-                      disabled={!message || isActing}
-                      onClick={handleCopyMessage}
+                      disabled={!message || !workspaceWaLink || isActing}
+                      onClick={handleOpenWhatsApp}
                       type="button"
                       variant="outline"
                     >
-                      <Clipboard className="h-4 w-4" />
-                      Copiar Mensagem
+                      <ExternalLink className="h-4 w-4" />
+                      {usesMobileWhatsappApp ? "Abrir App WhatsApp" : "Abrir no WhatsApp Web"}
                     </Button>
                   </div>
 
