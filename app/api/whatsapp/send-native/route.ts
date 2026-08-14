@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { listWhatsappInstances } from "@/src/lib/turso/whatsapp-instances-repository";
 import { sendEvolutionTextMessage } from "@/src/lib/whatsapp/evolution-client";
+import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -10,36 +11,47 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { instanceId, phone, message } = body;
+    const { instanceId, phone, message } = body as {
+      instanceId?: string;
+      phone: string;
+      message: string;
+    };
 
     if (!phone || !message) {
       return NextResponse.json({ error: "Telefone e mensagem são obrigatórios." }, { status: 400 });
     }
 
+    // Carrega instâncias do usuário
     const instances = await listWhatsappInstances(user.id);
-    // Usa a instância especificada ou a primeira conectada ('open')
-    const activeInstance = instanceId
-      ? instances.find((i) => i.id === instanceId && i.is_active)
-      : instances.find((i) => i.status === "open" && i.is_active);
 
-    if (!activeInstance) {
-      return NextResponse.json({
-        error: "Nenhum WhatsApp conectado. Conecte um número na aba Conexões WhatsApp primeiro.",
-      }, { status: 400 });
+    // Seleciona a instância: usa instanceId se fornecido, caso contrário pega a primeira conectada
+    const instance = instanceId
+      ? instances.find((i) => i.id === instanceId && i.status === "open")
+      : instances.find((i) => i.status === "open");
+
+    if (!instance) {
+      return NextResponse.json(
+        { error: "Nenhuma instância de WhatsApp conectada. Vá em Conexões e escaneie o QR Code." },
+        { status: 422 },
+      );
     }
 
-    const response = await sendEvolutionTextMessage(
-      activeInstance.server_url,
-      activeInstance.api_key,
-      activeInstance.instance_name,
+    // Usa credenciais globais (env vars) em vez das gravadas no banco
+    const { serverUrl, apiKey } = getEvolutionConfig();
+
+    const result = await sendEvolutionTextMessage(
+      serverUrl,
+      apiKey,
+      instance.instance_name,
       phone,
       message,
     );
 
-    return NextResponse.json({ success: true, response });
+    return NextResponse.json({ success: true, result });
   } catch (error) {
-    return NextResponse.json({
-      error: error instanceof Error ? error.message : "Erro ao enviar mensagem via WhatsApp nativo.",
-    }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Erro ao enviar mensagem." },
+      { status: 500 },
+    );
   }
 }
