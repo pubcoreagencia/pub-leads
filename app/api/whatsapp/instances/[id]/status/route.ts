@@ -11,7 +11,7 @@ import {
 import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createClient();
@@ -26,11 +26,13 @@ export async function GET(
     return NextResponse.json({ error: "Instância não encontrada." }, { status: 404 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const refreshQr = searchParams.get("refresh") === "true";
+
   try {
-    // Usa credenciais globais (env vars) em vez das gravadas no banco
     const { serverUrl, apiKey } = getEvolutionConfig();
 
-    // 1. Checa status da conexão na Evolution API
+    // 1. Checa status puro da conexão sem disparar reconexão
     const statusData = await getEvolutionInstanceStatus(
       serverUrl,
       apiKey,
@@ -42,27 +44,45 @@ export async function GET(
 
     if (statusData.state === "open") {
       status = "open";
-    } else {
-      // Se não estiver aberta, tenta pegar o QR code
+      // Se conectou, limpa o QR code do banco
+      await updateWhatsappInstance(user.id, instance.id, {
+        status: "open",
+        qr_code: null,
+      });
+      return NextResponse.json({
+        instance: { ...instance, status: "open", qr_code: null },
+        qrcode: null,
+      });
+    }
+
+    if (statusData.state === "connecting") {
+      status = "connecting";
+      await updateWhatsappInstance(user.id, instance.id, { status: "connecting" });
+      return NextResponse.json({
+        instance: { ...instance, status: "connecting" },
+        qrcode: null,
+      });
+    }
+
+    // 2. Só tenta obter novo QR Code se for explicitamente solicitado via refresh=true ou se a instância não tiver nenhum QR
+    if (refreshQr || (!instance.qr_code && status === "close")) {
       try {
         qr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
         if (qr.base64 || qr.code) {
           status = "qrcode";
+          await updateWhatsappInstance(user.id, instance.id, {
+            status: "qrcode",
+            qr_code: qr.base64 ?? null,
+          });
         }
       } catch {
         status = "close";
       }
     }
 
-    // Atualiza estado no banco Turso
-    await updateWhatsappInstance(user.id, instance.id, {
-      status,
-      qr_code: qr?.base64 ?? null,
-    });
-
     return NextResponse.json({
-      instance: { ...instance, status, qr_code: qr?.base64 ?? null },
-      qrcode: qr,
+      instance: { ...instance, status, qr_code: qr?.base64 ?? instance.qr_code },
+      qrcode: qr ?? (instance.qr_code ? { base64: instance.qr_code } : null),
     });
   } catch (error) {
     return NextResponse.json({
