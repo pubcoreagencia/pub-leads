@@ -5,6 +5,7 @@ import {
   updateWhatsappInstance,
 } from "@/src/lib/turso/whatsapp-instances-repository";
 import {
+  createEvolutionInstance,
   getEvolutionInstanceStatus,
   getEvolutionQRCode,
 } from "@/src/lib/whatsapp/evolution-client";
@@ -29,7 +30,7 @@ export async function GET(
   try {
     const { serverUrl, apiKey } = getEvolutionConfig();
 
-    // 1. Checa status puro da conexão na Evolution API
+    // 1. Checa status da conexão na Evolution API
     const statusData = await getEvolutionInstanceStatus(
       serverUrl,
       apiKey,
@@ -48,7 +49,7 @@ export async function GET(
       });
     }
 
-    // 2. Se não estiver 'open', busca o QR Code fresco mais recente da sessão
+    // 2. Se não estiver 'open', busca o QR Code fresco da Evolution API
     let qr = null;
     try {
       const liveQr = await getEvolutionQRCode(serverUrl, apiKey, instance.instance_name);
@@ -60,16 +61,30 @@ export async function GET(
         });
       }
     } catch {
-      qr = instance.qr_code ? { base64: instance.qr_code } : null;
+      // Se a instância não existir mais na Evolution API, recria automaticamente
+      try {
+        const createResult = await createEvolutionInstance(serverUrl, apiKey, instance.instance_name);
+        if (createResult.qrcode?.base64) {
+          qr = createResult.qrcode;
+          await updateWhatsappInstance(user.id, instance.id, {
+            status: "qrcode",
+            qr_code: createResult.qrcode.base64,
+          });
+        }
+      } catch {
+        qr = instance.qr_code ? { base64: instance.qr_code } : null;
+      }
     }
 
     return NextResponse.json({
       instance: { ...instance, status: "qrcode", qr_code: qr?.base64 ?? instance.qr_code },
       qrcode: qr ?? (instance.qr_code ? { base64: instance.qr_code } : null),
     });
-  } catch (error) {
+  } catch {
+    // Retorno seguro sem erro 500
     return NextResponse.json({
-      error: error instanceof Error ? error.message : "Erro ao checar status da instância.",
-    }, { status: 500 });
+      instance: { ...instance, status: instance.status || "qrcode" },
+      qrcode: instance.qr_code ? { base64: instance.qr_code } : null,
+    });
   }
 }
