@@ -39,13 +39,13 @@ export default function HomePage() {
             <span>Novo Motor de Prospecção & WhatsApp Multi-Atendentes</span>
           </div>
 
-          {/* LOGO HERO ANIMADA */}
+          {/* LOGO HERO ANIMADA COM MÁXIMO CONTRASTE */}
           <div className="relative group my-2">
-            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 opacity-20 blur-xl group-hover:opacity-35 transition duration-700" />
-            <div className="relative flex items-center justify-center p-6 rounded-2xl bg-white/90 border border-slate-200/80 shadow-2xl shadow-red-500/10">
+            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 opacity-25 blur-2xl group-hover:opacity-40 transition duration-700" />
+            <div className="relative flex items-center justify-center px-10 py-7 rounded-3xl bg-[linear-gradient(180deg,#140204_0%,#09090b_100%)] border border-red-950/60 shadow-2xl shadow-red-900/30">
               <Image
                 alt="PubLeads — Prospecção e Vendas B2B"
-                className="h-28 sm:h-36 w-auto object-contain transition-transform duration-500 group-hover:scale-105"
+                className="h-24 sm:h-32 w-auto object-contain transition-transform duration-500 group-hover:scale-105"
                 height={160}
                 priority
                 src="/brand/publeads-logo.png"
