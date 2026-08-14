@@ -36,7 +36,7 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(45000), // Tolera cold start do Render Free
   });
 
   if (!response.ok && response.status !== 403) {
@@ -44,7 +44,11 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
     throw new Error(`Erro ao criar instância na Evolution API: ${text || response.statusText}`);
   }
 
-  return response.json();
+  const data = (await response.json()) as EvolutionConnectResponse;
+  const base64 = data.qrcode?.base64 ?? data.base64 ?? null;
+  const code = data.qrcode?.code ?? data.code ?? null;
+
+  return { data, qrcode: base64 ? { base64, code } : null };
 }
 
 export async function getEvolutionQRCode(serverUrl: string, apiKey: string, instanceName: string) {
@@ -54,7 +58,7 @@ export async function getEvolutionQRCode(serverUrl: string, apiKey: string, inst
     headers: {
       apikey: apiKey,
     },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
@@ -77,7 +81,7 @@ export async function getEvolutionInstanceStatus(serverUrl: string, apiKey: stri
       headers: {
         apikey: apiKey,
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!response.ok) {
@@ -100,7 +104,6 @@ export async function sendEvolutionTextMessage(
   text: string,
 ) {
   const base = normalizeServerUrl(serverUrl);
-  // Formata o número (apenas dígitos, ex: 5511999998888)
   const cleanPhone = phone.replace(/\D/g, "");
 
   if (!cleanPhone) {
@@ -118,7 +121,7 @@ export async function sendEvolutionTextMessage(
       text,
       linkPreview: false,
     }),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
@@ -137,7 +140,7 @@ export async function deleteEvolutionInstance(serverUrl: string, apiKey: string,
       headers: {
         apikey: apiKey,
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(15000),
     });
   } catch {
     // Ignora se já tiver sido removida
