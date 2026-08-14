@@ -498,28 +498,29 @@ export function WhatsAppPageContent() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([fetchLeads(), loadFunnels(), loadProfile()])
-      .then(([items]) => {
-        if (!active) {
-          return;
-        }
-
+    void fetchLeads()
+      .then((items) => {
+        if (!active) return;
         setLeads(items);
         const pendingItems = items.filter(isPendingApproachLead);
         setLeadId(pendingItems.find((lead) => getLeadPhone(lead))?.id ?? pendingItems[0]?.id ?? "");
       })
       .catch((error) => {
-        toast({
-          title: "Erro ao carregar abordagem",
-          description: error instanceof Error ? error.message : "Tente novamente.",
-          variant: "error",
-        });
+        if (active) {
+          toast({
+            title: "Aviso na fila de leads",
+            description: error instanceof Error ? error.message : "Erro ao carregar leads.",
+            variant: "error",
+          });
+        }
       })
       .finally(() => {
-        if (active) {
-          setIsLoading(false);
-        }
+        if (active) setIsLoading(false);
       });
+
+    void loadFunnels().catch(() => null);
+    void loadProfile().catch(() => null);
+    void loadInstances().catch(() => null);
 
     return () => {
       active = false;
