@@ -3,12 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  Copy,
   Loader2,
   MessageCircle,
   Plus,
+  QrCode,
   RefreshCw,
-  Smartphone,
   Trash2,
   WifiOff,
   X,
@@ -22,7 +21,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import type { WhatsappInstance } from "@/src/lib/turso/whatsapp-instances-repository";
 
+// Intervalo do polling de QR Code (ms)
 const QR_POLL_INTERVAL = 3000;
+// Timeout máximo de espera pelo scan (ms) — 3 minutos
 const QR_TIMEOUT = 180_000;
 
 export function ConexoesPageContent() {
@@ -32,14 +33,12 @@ export function ConexoesPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [evolutionUnavailable, setEvolutionUnavailable] = useState(false);
 
-  // Form states
+  // Form state
   const [name, setName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
 
-  // Conexão ativa (Modal de pareamento)
-  const [activeInstance, setActiveInstance] = useState<WhatsappInstance | null>(null);
+  // QR Code state
+  const [activeQrInstance, setActiveQrInstance] = useState<WhatsappInstance | null>(null);
   const [qrCodeData, setQrCodeData] = useState<string | null>(null);
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,8 +55,9 @@ export function ConexoesPageContent() {
   }, []);
 
   const checkStatus = useCallback(
-    async (instance: WhatsappInstance): Promise<"open" | "qrcode"> => {
-      const res = await fetch(`/api/whatsapp/instances/${instance.id}/status`);
+    async (instance: WhatsappInstance, refresh = false): Promise<"open" | "qrcode"> => {
+      const url = `/api/whatsapp/instances/${instance.id}/status${refresh ? "?refresh=true" : ""}`;
+      const res = await fetch(url);
       const data = await res.json() as {
         instance?: WhatsappInstance;
         qrcode?: { base64?: string };
@@ -92,25 +92,25 @@ export function ConexoesPageContent() {
         if (Date.now() - pollStartRef.current > QR_TIMEOUT) {
           stopPolling();
           toast({
-            title: "Sessão expirou",
-            description: "Clique em 'Conectar' para gerar um novo código.",
+            title: "QR Code expirou",
+            description: "Clique em 'Escanear QR Code' para gerar um novo código.",
             variant: "error",
           });
           return;
         }
 
         try {
-          const status = await checkStatus(instance);
+          const status = await checkStatus(instance, false);
           if (status === "open") {
             stopPolling();
-            setActiveInstance(null);
+            setActiveQrInstance(null);
             setQrCodeData(null);
-            setPairingCode(null);
             toast({
               title: "✅ WhatsApp Conectado!",
               description: `A instância "${instance.name}" foi conectada com sucesso.`,
               variant: "success",
             });
+            // Recarrega lista completa
             const res = await fetch("/api/whatsapp/instances");
             const d = await res.json() as { instances?: WhatsappInstance[] };
             if (d.instances) setInstances(d.instances);
@@ -160,15 +160,11 @@ export function ConexoesPageContent() {
       const res = await fetch("/api/whatsapp/instances", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          phoneNumber: phoneNumber.trim() || undefined,
-        }),
+        body: JSON.stringify({ name: name.trim() }),
       });
       const data = await res.json() as {
         instance?: WhatsappInstance;
         qrcode?: { base64?: string };
-        pairingCode?: string;
         error?: string;
       };
 
@@ -181,19 +177,17 @@ export function ConexoesPageContent() {
       if (!res.ok) throw new Error(data.error ?? "Erro ao criar instância.");
 
       toast({
-        title: "Instância pronta!",
-        description: data.pairingCode ? "Digite o código no seu celular." : "Escaneie o QR Code.",
+        title: "Instância criada!",
+        description: "Escaneie o QR Code para conectar seu WhatsApp.",
         variant: "success",
       });
       setShowCreateModal(false);
       setName("");
-      setPhoneNumber("");
       await loadInstances();
 
-      if (data.instance) {
-        setActiveInstance(data.instance);
-        setQrCodeData(data.qrcode?.base64 ?? null);
-        setPairingCode(data.pairingCode ?? null);
+      if (data.instance && data.qrcode?.base64) {
+        setActiveQrInstance(data.instance);
+        setQrCodeData(data.qrcode.base64);
         startPolling(data.instance);
       }
     } catch (err) {
@@ -207,20 +201,20 @@ export function ConexoesPageContent() {
     }
   }
 
-  // ─── Abrir pareamento manualmente ─────────────────────────────────────────
+  // ─── Abrir QR Code manualmente ────────────────────────────────────────────
 
-  async function handleOpenConnect(instance: WhatsappInstance) {
+  async function handleOpenQr(instance: WhatsappInstance) {
     setIsCheckingStatus(true);
     try {
-      const status = await checkStatus(instance);
+      const status = await checkStatus(instance, true);
       if (status === "open") {
         toast({ title: "Já conectado!", description: "Este WhatsApp já está ativo.", variant: "success" });
         return;
       }
-      setActiveInstance(instance);
+      setActiveQrInstance(instance);
       startPolling(instance);
     } catch {
-      toast({ title: "Erro de status", description: "Não foi possível verificar.", variant: "error" });
+      toast({ title: "Erro de status", description: "Não foi possível obter o QR Code.", variant: "error" });
     } finally {
       setIsCheckingStatus(false);
     }
@@ -248,11 +242,10 @@ export function ConexoesPageContent() {
     }
   }
 
-  function handleCloseModal() {
+  function handleCloseQr() {
     stopPolling();
-    setActiveInstance(null);
+    setActiveQrInstance(null);
     setQrCodeData(null);
-    setPairingCode(null);
   }
 
   return (
@@ -260,7 +253,7 @@ export function ConexoesPageContent() {
       <PageHeader
         eyebrow="Multi-atendimento nativo"
         title="Conexões de WhatsApp"
-        description="Conecte seus números de WhatsApp via QR Code ou Código de Pareamento de 8 dígitos para disparos automáticos."
+        description="Conecte seus números de WhatsApp via QR Code para disparos automáticos e múltiplos atendentes."
         actions={
           <Button
             onClick={() => setShowCreateModal(true)}
@@ -295,7 +288,7 @@ export function ConexoesPageContent() {
           <MessageCircle className="mb-4 h-8 w-8 text-emerald-600" />
           <h2 className="text-lg font-semibold text-slate-950">Nenhum WhatsApp conectado</h2>
           <p className="mt-1 max-w-md text-sm text-slate-500">
-            Conecte uma conta para disparar mensagens sem precisar abrir o WhatsApp Web manualmente.
+            Conecte uma instância para enviar mensagens nativas sem precisar abrir o WhatsApp Web.
           </p>
           <Button
             onClick={() => setShowCreateModal(true)}
@@ -329,24 +322,30 @@ export function ConexoesPageContent() {
                     ) : (
                       <XCircle className="h-3 w-3" />
                     )}
-                    {isConnected ? "Conectado" : "Aguardando Conexão"}
+                    {isConnected ? "Conectado" : "Aguardando QR"}
                   </span>
                 </CardHeader>
                 <CardContent className="p-4 pt-3 space-y-3">
+                  {instance.phone ? (
+                    <p className="text-xs text-slate-500">
+                      Número: <span className="font-semibold text-slate-800">{instance.phone}</span>
+                    </p>
+                  ) : null}
+
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                     {!isConnected ? (
                       <Button
                         size="sm"
-                        onClick={() => void handleOpenConnect(instance)}
+                        onClick={() => void handleOpenQr(instance)}
                         disabled={isCheckingStatus}
                         className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold gap-1.5"
                       >
                         {isCheckingStatus ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Smartphone className="h-3.5 w-3.5" />
+                          <QrCode className="h-3.5 w-3.5" />
                         )}
-                        Conectar Aparelho
+                        Escanear QR Code
                       </Button>
                     ) : (
                       <Button
@@ -354,7 +353,7 @@ export function ConexoesPageContent() {
                         variant="outline"
                         onClick={async () => {
                           setIsCheckingStatus(true);
-                          await checkStatus(instance).catch(() => null);
+                          await checkStatus(instance, false).catch(() => null);
                           setIsCheckingStatus(false);
                         }}
                         disabled={isCheckingStatus}
@@ -382,12 +381,12 @@ export function ConexoesPageContent() {
       {/* MODAL CRIAR INSTÂNCIA */}
       {showCreateModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <Card className="w-full max-w-md border-slate-200 bg-white shadow-xl">
+          <Card className="w-full max-w-sm border-slate-200 bg-white shadow-xl">
             <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
               <div>
                 <CardTitle className="text-lg font-bold text-slate-900">Conectar Novo WhatsApp</CardTitle>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Conecte por Código de 8 dígitos ou QR Code.
+                  Dê um nome para identificar este número/atendente.
                 </p>
               </div>
               <button
@@ -402,7 +401,7 @@ export function ConexoesPageContent() {
               <CardContent className="p-5 space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="inst-name" className="text-xs font-semibold text-slate-700">
-                    Nome do Atendente / Chip
+                    Nome da Instância / Atendente
                   </Label>
                   <Input
                     id="inst-name"
@@ -412,26 +411,10 @@ export function ConexoesPageContent() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
-                </div>
-
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="inst-phone" className="text-xs font-semibold text-slate-700">
-                      Número do WhatsApp com DDD (Recomendado)
-                    </Label>
-                    <span className="text-[11px] text-emerald-600 font-medium">Gera código de 8 dígitos</span>
-                  </div>
-                  <Input
-                    id="inst-phone"
-                    placeholder="Ex: 21983419000 (com DDD, sem traço)"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                  />
-                  <p className="text-[11px] text-slate-500">
-                    💡 <strong>Dica:</strong> Se preencher o número, você pode conectar digitando o código de 8 dígitos direto no celular (sem depender de câmera).
+                  <p className="text-xs text-slate-400">
+                    Este nome aparece na lista de conexões.
                   </p>
                 </div>
-
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <Button
                     type="button"
@@ -446,8 +429,8 @@ export function ConexoesPageContent() {
                     disabled={isCreating}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-1.5"
                   >
-                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Smartphone className="h-4 w-4" />}
-                    Conectar WhatsApp
+                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <QrCode className="h-4 w-4" />}
+                    Gerar QR Code
                   </Button>
                 </div>
               </CardContent>
@@ -456,86 +439,53 @@ export function ConexoesPageContent() {
         </div>
       ) : null}
 
-      {/* MODAL DE PAREAMENTO (CÓDIGO DE 8 DÍGITOS OU QR CODE) */}
-      {activeInstance ? (
+      {/* MODAL QR CODE COM AUTO-DETECT */}
+      {activeQrInstance && qrCodeData ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-sm border-slate-200 bg-white shadow-2xl">
             <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between space-y-0">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900">Conectar WhatsApp</CardTitle>
-                <p className="text-xs text-slate-500 mt-0.5">{activeInstance.name}</p>
+                <CardTitle className="text-lg font-bold text-slate-900">Escanear QR Code</CardTitle>
+                <p className="text-xs text-slate-500 mt-0.5">{activeQrInstance.name}</p>
               </div>
               <button
                 type="button"
-                onClick={handleCloseModal}
+                onClick={handleCloseQr}
                 className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
                 <X className="h-4 w-4" />
               </button>
             </CardHeader>
             <CardContent className="p-5 space-y-4 text-center">
-              {/* SE TEM CÓDIGO DE PAREAMENTO DE 8 DÍGITOS */}
-              {pairingCode ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-600 leading-relaxed text-left">
-                    1. No celular: <strong>WhatsApp &gt; Aparelhos conectados &gt; Conectar aparelho</strong>.<br />
-                    2. Toque na opção <strong>&quot;Conectar com número de telefone&quot;</strong> na parte inferior.<br />
-                    3. Digite o código abaixo:
-                  </p>
-                  <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-50 p-4 border border-emerald-200">
-                    <span className="font-mono text-2xl font-extrabold tracking-widest text-emerald-800">
-                      {pairingCode.length === 8 ? `${pairingCode.slice(0, 4)} - ${pairingCode.slice(4)}` : pairingCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        void navigator.clipboard.writeText(pairingCode);
-                        toast({ title: "Copiado!", description: "Código copiado para a área de transferência.", variant: "success" });
-                      }}
-                      className="rounded-lg p-2 text-emerald-700 hover:bg-emerald-100 transition"
-                      title="Copiar código"
-                    >
-                      <Copy className="h-5 w-5" />
-                    </button>
-                  </div>
-                </div>
-              ) : qrCodeData ? (
-                <div className="space-y-3">
-                  <p className="text-xs text-slate-500">
-                    Abra o WhatsApp no celular &gt; <strong>Aparelhos conectados</strong> &gt; <strong>Conectar aparelho</strong> e aponte para o QR Code:
-                  </p>
-                  <div className="flex justify-center rounded-xl bg-slate-50 p-3 border border-slate-100">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={
-                        qrCodeData.startsWith("data:")
-                          ? qrCodeData
-                          : `data:image/png;base64,${qrCodeData}`
-                      }
-                      alt="QR Code WhatsApp"
-                      className="h-52 w-52 rounded"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-8 gap-2">
-                  <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                  <p className="text-xs text-slate-500">Gerando chave de conexão segura...</p>
-                </div>
-              )}
+              <p className="text-xs text-slate-500">
+                Abra o WhatsApp no celular &gt; <strong>Aparelhos conectados</strong> &gt;{" "}
+                <strong>Conectar aparelho</strong> e escaneie o código.
+              </p>
+              <div className="flex justify-center rounded-xl bg-slate-50 p-3 border border-slate-100">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={
+                    qrCodeData.startsWith("data:")
+                      ? qrCodeData
+                      : `data:image/png;base64,${qrCodeData}`
+                  }
+                  alt="QR Code WhatsApp"
+                  className="h-56 w-56 rounded"
+                />
+              </div>
 
               {isPolling ? (
-                <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium animate-pulse pt-2">
+                <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium animate-pulse">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Aguardando autenticação do celular...
+                  Aguardando escaneamento...
                 </div>
               ) : null}
 
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleCloseModal}
+                  onClick={handleCloseQr}
                   className="flex-1 text-xs"
                 >
                   Fechar
@@ -545,9 +495,9 @@ export function ConexoesPageContent() {
                   onClick={async () => {
                     setIsCheckingStatus(true);
                     try {
-                      const status = await checkStatus(activeInstance);
+                      const status = await checkStatus(activeQrInstance, false);
                       if (status === "open") {
-                        handleCloseModal();
+                        handleCloseQr();
                         toast({
                           title: "✅ Conectado!",
                           description: "WhatsApp conectado com sucesso.",
@@ -556,8 +506,8 @@ export function ConexoesPageContent() {
                         void loadInstances();
                       } else {
                         toast({
-                          title: "Aguardando confirmação",
-                          description: "Confirme a conexão no aplicativo do WhatsApp no celular.",
+                          title: "Aguardando leitura",
+                          description: "Escaneie o QR Code acima com o WhatsApp.",
                           variant: "error",
                         });
                       }
@@ -575,7 +525,7 @@ export function ConexoesPageContent() {
                   ) : (
                     <RefreshCw className="h-3.5 w-3.5" />
                   )}
-                  Verificar Conexão
+                  Já Escaneei
                 </Button>
               </div>
             </CardContent>
