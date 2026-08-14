@@ -20,11 +20,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import type { WhatsappInstance } from "@/src/lib/turso/whatsapp-instances-repository";
+import { Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 
 // Intervalo do polling de QR Code (ms)
 const QR_POLL_INTERVAL = 3000;
 // Timeout máximo de espera pelo scan (ms) — 3 minutos
 const QR_TIMEOUT = 180_000;
+
+const WARMUP_TASKS = [
+  { day: 1, title: "Dia 1 - Reconhecimento", tasks: [
+    { id: "d1_t1", label: "Envie 3 mensagens manuais curtas para familiares/amigos" },
+    { id: "d1_t2", label: "Receba e responda a 2 mensagens" },
+    { id: "d1_t3", label: "Aguarde 24h sem usar o sistema automático" },
+  ]},
+  { day: 2, title: "Dia 2 - Aquecimento", tasks: [
+    { id: "d2_t1", label: "Participe de 1 grupo no WhatsApp" },
+    { id: "d2_t2", label: "Envie 1 áudio curto para um conhecido" },
+    { id: "d2_t3", label: "Troque cerca de 10 mensagens manuais" },
+  ]},
+  { day: 3, title: "Dia 3 - Validação", tasks: [
+    { id: "d3_t1", label: "Poste 1 foto no Status do WhatsApp" },
+    { id: "d3_t2", label: "Converse com 5 pessoas diferentes" },
+    { id: "d3_t3", label: "Realize 1 disparo teste para seu próprio número" },
+  ]},
+];
 
 export function ConexoesPageContent() {
   const [instances, setInstances] = useState<WhatsappInstance[]>([]);
@@ -43,6 +62,11 @@ export function ConexoesPageContent() {
   const [isCheckingStatus, setIsCheckingStatus] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
+
+  // Warmup state
+  const [warmupInstance, setWarmupInstance] = useState<WhatsappInstance | null>(null);
+  const [warmupProgress, setWarmupProgress] = useState<Record<string, boolean>>({});
+  const [isSavingWarmup, setIsSavingWarmup] = useState(false);
 
   // ─── Polling do status da conexão ──────────────────────────────────────────
 
@@ -248,6 +272,67 @@ export function ConexoesPageContent() {
     setQrCodeData(null);
   }
 
+  // ─── Maturador (Warm-up) ──────────────────────────────────────────────────
+
+  function handleOpenWarmup(instance: WhatsappInstance) {
+    let progress = {};
+    try {
+      if (instance.warmup_progress_json) {
+        progress = JSON.parse(instance.warmup_progress_json);
+      }
+    } catch {
+      // ignore
+    }
+    setWarmupProgress(progress);
+    setWarmupInstance(instance);
+  }
+
+  async function handleSaveWarmup() {
+    if (!warmupInstance) return;
+    setIsSavingWarmup(true);
+    try {
+      const isCompleted = WARMUP_TASKS.flatMap((d) => d.tasks).every((t) => warmupProgress[t.id]);
+      const res = await fetch(`/api/whatsapp/instances/${warmupInstance.id}/warmup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          warmup_completed: isCompleted,
+          warmup_progress_json: warmupProgress,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao salvar progresso.");
+
+      setInstances((prev) =>
+        prev.map((i) =>
+          i.id === warmupInstance.id
+            ? { ...i, warmup_completed: isCompleted, warmup_progress_json: JSON.stringify(warmupProgress) }
+            : i
+        ),
+      );
+      toast({ title: "Progresso salvo", description: "O checklist de maturação foi atualizado.", variant: "success" });
+      setWarmupInstance(null);
+    } catch {
+      toast({ title: "Erro", description: "Falha ao salvar maturação.", variant: "error" });
+    } finally {
+      setIsSavingWarmup(false);
+    }
+  }
+
+  function getWarmupHealth(instance: WhatsappInstance) {
+    if (instance.warmup_completed) return { text: "Maturação Concluída", color: "text-emerald-700 bg-emerald-100", icon: ShieldCheck };
+    
+    const createdAt = new Date(instance.created_at);
+    const diffTime = Math.abs(Date.now() - createdAt.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return { 
+      text: `Maturação: Dia ${diffDays}`, 
+      color: diffDays >= 3 ? "text-amber-700 bg-amber-100" : "text-red-700 bg-red-100", 
+      icon: diffDays >= 3 ? Shield : ShieldAlert 
+    };
+  }
+
   return (
     <section className="space-y-6">
       <PageHeader
@@ -331,6 +416,23 @@ export function ConexoesPageContent() {
                       Número: <span className="font-semibold text-slate-800">{instance.phone}</span>
                     </p>
                   ) : null}
+
+                  {isConnected && (
+                    <div className="pt-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleOpenWarmup(instance)}
+                        className={`w-full justify-start text-xs font-semibold h-8 px-2 ${getWarmupHealth(instance).color} hover:opacity-80`}
+                      >
+                        {(() => {
+                          const Icon = getWarmupHealth(instance).icon;
+                          return <Icon className="mr-2 h-4 w-4" />;
+                        })()}
+                        {getWarmupHealth(instance).text}
+                      </Button>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
                     {!isConnected ? (
@@ -532,6 +634,79 @@ export function ConexoesPageContent() {
           </Card>
         </div>
       ) : null}
+
+      {/* MODAL MATURADOR */}
+      {warmupInstance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <Card className="w-full max-w-md border-slate-200 bg-white shadow-xl max-h-[90vh] flex flex-col">
+            <CardHeader className="p-5 border-b border-slate-100 flex flex-row items-center justify-between space-y-0 shrink-0">
+              <div>
+                <CardTitle className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-emerald-600" />
+                  Maturador do Chip
+                </CardTitle>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Acompanhamento de segurança para evitar banimento no WhatsApp.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWarmupInstance(null)}
+                className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </CardHeader>
+            <CardContent className="p-5 overflow-y-auto space-y-6">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 font-medium">
+                Siga as etapas abaixo ao longo dos dias usando seu celular. 
+                Só dispare em massa após concluir o aquecimento para não perder o número.
+              </div>
+              
+              <div className="space-y-6">
+                {WARMUP_TASKS.map((dayPlan) => (
+                  <div key={dayPlan.day} className="space-y-3">
+                    <h4 className="text-sm font-bold text-slate-800">{dayPlan.title}</h4>
+                    <div className="space-y-2">
+                      {dayPlan.tasks.map((task) => (
+                        <label key={task.id} className="flex items-start gap-2 cursor-pointer group">
+                          <div className="flex items-center h-5">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer"
+                              checked={warmupProgress[task.id] || false}
+                              onChange={(e) => {
+                                setWarmupProgress(prev => ({ ...prev, [task.id]: e.target.checked }));
+                              }}
+                            />
+                          </div>
+                          <span className={`text-sm ${warmupProgress[task.id] ? "text-slate-400 line-through" : "text-slate-700"}`}>
+                            {task.label}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2 shrink-0">
+                <Button variant="outline" onClick={() => setWarmupInstance(null)} disabled={isSavingWarmup}>
+                  Fechar
+                </Button>
+                <Button 
+                  onClick={() => void handleSaveWarmup()} 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  disabled={isSavingWarmup}
+                >
+                  {isSavingWarmup ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                  Salvar Progresso
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </section>
   );
 }

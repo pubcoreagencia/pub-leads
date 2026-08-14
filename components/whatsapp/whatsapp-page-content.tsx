@@ -34,6 +34,7 @@ import {
   copyWorkspaceMessage,
   openReusableWorkspaceWindow,
 } from "@/src/lib/whatsapp/workspace";
+import type { WhatsappInstance } from "@/src/lib/turso/whatsapp-instances-repository";
 
 type MessageFunnelStep = {
   id: string;
@@ -436,8 +437,10 @@ export function WhatsAppPageContent() {
     }
   }, [message, selectedLead, usesMobileWhatsappApp]);
 
-  const [instances, setInstances] = useState<Array<{ id: string; name: string; status: string; phone: string | null }>>([]);
+  const [instances, setInstances] = useState<WhatsappInstance[]>([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
+
+  const selectedInstance = useMemo(() => instances.find(i => i.id === selectedInstanceId) || null, [instances, selectedInstanceId]);
 
   const loadInstances = useCallback(async () => {
     try {
@@ -1217,6 +1220,13 @@ export function WhatsAppPageContent() {
                         Gerar Variação IA
                       </Button>
                     </div>
+
+                    {selectedInstance && !selectedInstance.warmup_completed && (
+                      <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 font-medium flex items-start gap-2">
+                        <span className="text-amber-600 font-bold">⚠️ Alto Risco:</span>
+                        Este chip não concluiu o acompanhamento de maturação. Fazer disparos automáticos agora possui altíssimo risco de bloqueio. Recomendamos amadurecer o número na aba Conexões primeiro.
+                      </div>
+                    )}
 
                     <textarea
                       className="min-h-[160px] w-full rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm font-normal text-slate-900 leading-relaxed outline-none focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100 transition"

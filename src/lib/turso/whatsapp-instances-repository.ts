@@ -14,6 +14,8 @@ export type WhatsappInstance = {
   status: WhatsappInstanceStatus;
   is_active: boolean;
   qr_code: string | null;
+  warmup_completed: boolean;
+  warmup_progress_json: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,25 +23,35 @@ export type WhatsappInstance = {
 let ensureSchemaPromise: Promise<void> | null = null;
 
 export async function ensureWhatsappInstancesSchema() {
-  ensureSchemaPromise ??= getTursoClient().executeMultiple(`
-    create table if not exists whatsapp_instances (
-      id text primary key,
-      user_id text not null,
-      name text not null,
-      phone text,
-      server_url text not null,
-      api_key text not null,
-      instance_name text not null,
-      status text not null default 'close',
-      is_active integer not null default 1,
-      qr_code text,
-      created_at text not null default current_timestamp,
-      updated_at text not null default current_timestamp
-    );
+  if (!ensureSchemaPromise) {
+    ensureSchemaPromise = (async () => {
+      await getTursoClient().executeMultiple(`
+        create table if not exists whatsapp_instances (
+          id text primary key,
+          user_id text not null,
+          name text not null,
+          phone text,
+          server_url text not null,
+          api_key text not null,
+          instance_name text not null,
+          status text not null default 'close',
+          is_active integer not null default 1,
+          qr_code text,
+          warmup_completed integer not null default 0,
+          warmup_progress_json text,
+          created_at text not null default current_timestamp,
+          updated_at text not null default current_timestamp
+        );
 
-    create index if not exists whatsapp_instances_user_idx on whatsapp_instances(user_id);
-    create unique index if not exists whatsapp_instances_user_name_unique_idx on whatsapp_instances(user_id, instance_name);
-  `);
+        create index if not exists whatsapp_instances_user_idx on whatsapp_instances(user_id);
+        create unique index if not exists whatsapp_instances_user_name_unique_idx on whatsapp_instances(user_id, instance_name);
+      `);
+      
+      // Backward compatibility for existing tables
+      try { await getTursoClient().execute("ALTER TABLE whatsapp_instances ADD COLUMN warmup_completed integer not null default 0"); } catch (e) {}
+      try { await getTursoClient().execute("ALTER TABLE whatsapp_instances ADD COLUMN warmup_progress_json text"); } catch (e) {}
+    })();
+  }
   await ensureSchemaPromise;
 }
 
@@ -61,6 +73,8 @@ export async function listWhatsappInstances(userId: string): Promise<WhatsappIns
     status: (row.status as WhatsappInstanceStatus) || "close",
     is_active: Boolean(row.is_active),
     qr_code: row.qr_code ? String(row.qr_code) : null,
+    warmup_completed: Boolean(row.warmup_completed),
+    warmup_progress_json: row.warmup_progress_json ? String(row.warmup_progress_json) : null,
     created_at: String(row.created_at),
     updated_at: String(row.updated_at),
   }));
@@ -75,9 +89,9 @@ export async function createWhatsappInstance(
   const now = new Date().toISOString();
 
   await getTursoClient().execute({
-    args: [id, userId, data.name, data.server_url, data.api_key, data.instance_name, "close", 1, now, now] as InValue[],
-    sql: `insert into whatsapp_instances (id, user_id, name, server_url, api_key, instance_name, status, is_active, created_at, updated_at)
-          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, userId, data.name, data.server_url, data.api_key, data.instance_name, "close", 1, 0, null, now, now] as InValue[],
+    sql: `insert into whatsapp_instances (id, user_id, name, server_url, api_key, instance_name, status, is_active, warmup_completed, warmup_progress_json, created_at, updated_at)
+          values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   });
 
   const instances = await listWhatsappInstances(userId);
@@ -89,7 +103,7 @@ export async function createWhatsappInstance(
 export async function updateWhatsappInstance(
   userId: string,
   id: string,
-  data: Partial<Pick<WhatsappInstance, "status" | "phone" | "qr_code" | "is_active" | "name">>,
+  data: Partial<Pick<WhatsappInstance, "status" | "phone" | "qr_code" | "is_active" | "name" | "warmup_completed" | "warmup_progress_json">>,
 ): Promise<void> {
   await ensureWhatsappInstancesSchema();
   const sets: string[] = ["updated_at = current_timestamp"];
@@ -114,6 +128,14 @@ export async function updateWhatsappInstance(
   if (data.name !== undefined) {
     sets.push("name = ?");
     args.push(data.name);
+  }
+  if (data.warmup_completed !== undefined) {
+    sets.push("warmup_completed = ?");
+    args.push(data.warmup_completed ? 1 : 0);
+  }
+  if (data.warmup_progress_json !== undefined) {
+    sets.push("warmup_progress_json = ?");
+    args.push(data.warmup_progress_json);
   }
 
   args.push(userId, id);
