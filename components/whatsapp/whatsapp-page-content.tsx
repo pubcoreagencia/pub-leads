@@ -436,6 +436,24 @@ export function WhatsAppPageContent() {
     }
   }, [message, selectedLead, usesMobileWhatsappApp]);
 
+  const [instances, setInstances] = useState<Array<{ id: string; name: string; status: string; phone: string | null }>>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>("");
+
+  const loadInstances = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/instances");
+      const data = await res.json();
+      if (data.instances) {
+        setInstances(data.instances);
+        const openInst = data.instances.find((i: { status: string }) => i.status === "open");
+        if (openInst) setSelectedInstanceId(openInst.id);
+        else if (data.instances[0]) setSelectedInstanceId(data.instances[0].id);
+      }
+    } catch {
+      // Silencioso se não houver instâncias
+    }
+  }, []);
+
   const loadFunnels = useCallback(async () => {
     const payload = await fetch("/api/message-funnels", { cache: "no-store" }).then((response) =>
       parseJson<FunnelPayload>(response),
@@ -506,7 +524,7 @@ export function WhatsAppPageContent() {
     return () => {
       active = false;
     };
-  }, [loadFunnels, loadProfile]);
+  }, [loadFunnels, loadProfile, loadInstances]);
 
   useEffect(() => {
     setUsesMobileWhatsappApp(isMobileWhatsappEnvironment());
@@ -602,7 +620,7 @@ export function WhatsAppPageContent() {
       const res = await fetch("/api/whatsapp/send-native", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, message }),
+        body: JSON.stringify({ phone, message, instanceId: selectedInstanceId || undefined }),
       });
       const data = await res.json();
 
@@ -1123,20 +1141,39 @@ export function WhatsAppPageContent() {
                       </p>
                     </div>
 
-                    {/* SELEÇÃO RÁPIDA DE ROTEIRO / COPY */}
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-slate-500">Roteiro:</span>
-                      <select
-                        className="h-9 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                        onChange={(event) => handleSelectFunnel(event.target.value)}
-                        value={selectedFunnel?.id ?? ""}
-                      >
-                        {funnels.map((funnel) => (
-                          <option key={funnel.id} value={funnel.id}>
-                            {funnel.name}
-                          </option>
-                        ))}
-                      </select>
+                    {/* SELEÇÃO RÁPIDA DE CHIP / INSTÂNCIA E ROTEIRO */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {instances.length > 0 ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-medium text-slate-500">Chip / Atendente:</span>
+                          <select
+                            className="h-9 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                            onChange={(event) => setSelectedInstanceId(event.target.value)}
+                            value={selectedInstanceId}
+                          >
+                            {instances.map((inst) => (
+                              <option key={inst.id} value={inst.id}>
+                                {inst.status === "open" ? "🟢" : "⚪"} {inst.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : null}
+
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-slate-500">Roteiro:</span>
+                        <select
+                          className="h-9 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                          onChange={(event) => handleSelectFunnel(event.target.value)}
+                          value={selectedFunnel?.id ?? ""}
+                        >
+                          {funnels.map((funnel) => (
+                            <option key={funnel.id} value={funnel.id}>
+                              {funnel.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
