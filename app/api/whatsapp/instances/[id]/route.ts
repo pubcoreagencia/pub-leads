@@ -5,6 +5,7 @@ import {
   listWhatsappInstances,
 } from "@/src/lib/turso/whatsapp-instances-repository";
 import { deleteEvolutionInstance } from "@/src/lib/whatsapp/evolution-client";
+import { getEvolutionConfig } from "@/src/lib/whatsapp/config";
 
 export async function DELETE(
   _request: Request,
@@ -23,7 +24,9 @@ export async function DELETE(
   }
 
   try {
-    await deleteEvolutionInstance(instance.server_url, instance.api_key, instance.instance_name);
+    // Usa credenciais globais (env vars) em vez das gravadas no banco
+    const { serverUrl, apiKey } = getEvolutionConfig();
+    await deleteEvolutionInstance(serverUrl, apiKey, instance.instance_name);
     await deleteWhatsappInstance(user.id, instance.id);
     return NextResponse.json({ success: true });
   } catch (error) {
