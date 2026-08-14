@@ -274,10 +274,50 @@ export async function createLead(userId: string, data: LeadWriteInput) {
 }
 
 export async function createManyLeads(userId: string, leads: LeadWriteInput[]): Promise<CreateManyLeadsResult> {
+  if (leads.length === 0) return { created: [], skipped: [] };
+
+  const client = getTursoClient();
   const created: Lead[] = [];
   const skipped: Lead[] = [];
 
+  // Passo 1: dedup em bulk por source + source_place_id (1 query para todos os leads com place_id)
+  const leadsWithPlaceId = leads.filter((l) => l.source && l.source_place_id?.trim());
+  const existingPlaceKeys = new Set<string>();
+
+  if (leadsWithPlaceId.length > 0) {
+    const conditions = leadsWithPlaceId.map(() => "(source = ? and source_place_id = ?)").join(" or ");
+    const args: InValue[] = [userId, ...leadsWithPlaceId.flatMap((l) => [l.source!, l.source_place_id!.trim()])];
+    const result = await client.execute({
+      args,
+      sql: `select source, source_place_id from leads where user_id = ? and (${conditions})`,
+    });
+    for (const row of result.rows) {
+      existingPlaceKeys.add(`${row.source}::${row.source_place_id}`);
+    }
+  }
+
+  // Passo 2: separar duplicatas conhecidas dos candidatos a inserção
+  const candidates: LeadWriteInput[] = [];
+
   for (const lead of leads) {
+    const placeKey =
+      lead.source && lead.source_place_id?.trim()
+        ? `${lead.source}::${lead.source_place_id.trim()}`
+        : null;
+
+    if (placeKey && existingPlaceKeys.has(placeKey)) {
+      const existing = await findDuplicateLead(userId, lead);
+      if (existing) skipped.push(rowToLead(existing));
+      continue;
+    }
+
+    candidates.push(lead);
+  }
+
+  // Passo 3: verificar dedup restante (cnpj, telefone, website, nome+cidade) para candidatos sem place_id
+  const payloads: ReturnType<typeof normalizeLeadInput>[] = [];
+
+  for (const lead of candidates) {
     const duplicate = await findDuplicateLead(userId, lead);
 
     if (duplicate) {
@@ -285,8 +325,32 @@ export async function createManyLeads(userId: string, leads: LeadWriteInput[]): 
       continue;
     }
 
-    const createdLead = await createLead(userId, lead);
-    created.push(createdLead);
+    payloads.push(normalizeLeadInput(userId, lead));
+  }
+
+  // Passo 4: batch insert — todos os inserts em 1 único round-trip HTTP
+  if (payloads.length > 0) {
+    const cols = leadColumns;
+    const placeholders = cols.map(() => "?").join(", ");
+    const insertSql = `insert into leads (${cols.join(", ")}) values (${placeholders})`;
+
+    await client.batch(
+      payloads.map((payload) => ({
+        args: cols.map((col) => payload[col]) as InValue[],
+        sql: insertSql,
+      })),
+      "write",
+    );
+
+    // Busca todos os leads inseridos em 1 query
+    const ids = payloads.map((p) => p.id);
+    const idPlaceholders = ids.map(() => "?").join(", ");
+    const result = await client.execute({
+      args: [userId, ...ids],
+      sql: `${selectLeadSql} where user_id = ? and id in (${idPlaceholders}) order by created_at`,
+    });
+
+    created.push(...result.rows.map((row) => rowToLead(rowToTursoLead(row))));
   }
 
   return { created, skipped };
@@ -340,15 +404,13 @@ export async function listLeads(userId: string, filters: LeadListFilters = {}) {
   }
 
   if (filters.qualification === "with_whatsapp") {
-    clauses.push(
-      "(raw_data like '%whatsapp_status%confirmed%' or raw_data like '%whatsapp_status%possible%')",
-    );
+    // Usa coluna indexada whatsapp_status ao invés de LIKE no JSON
+    clauses.push("whatsapp_status in ('confirmed', 'possible')");
   }
 
   if (filters.qualification === "without_whatsapp") {
-    clauses.push(
-      "(whatsapp_status in ('landline', 'missing', 'invalid') or raw_data like '%whatsapp_status%landline%' or raw_data like '%whatsapp_status%missing%' or raw_data like '%whatsapp_status%invalid%')",
-    );
+    // Usa coluna indexada whatsapp_status ao invés de LIKE no JSON
+    clauses.push("whatsapp_status in ('landline', 'missing', 'invalid')");
   }
 
   if (filters.qualification === "with_instagram") {
@@ -477,22 +539,17 @@ export async function deleteLeads(userId: string, leadIds: string[]) {
   const args: InValue[] = [userId, ...ids];
   const client = getTursoClient();
 
-  await client.execute({
-    args,
-    sql: `delete from lead_messages where user_id = ? and lead_id in (${placeholders})`,
-  });
+  // Agrupa os 3 deletes em 1 único round-trip HTTP via batch()
+  const results = await client.batch(
+    [
+      { args, sql: `delete from lead_messages where user_id = ? and lead_id in (${placeholders})` },
+      { args, sql: `delete from lead_notes where user_id = ? and lead_id in (${placeholders})` },
+      { args, sql: `delete from leads where user_id = ? and id in (${placeholders})` },
+    ],
+    "write",
+  );
 
-  await client.execute({
-    args,
-    sql: `delete from lead_notes where user_id = ? and lead_id in (${placeholders})`,
-  });
-
-  const result = await getTursoClient().execute({
-    args,
-    sql: `delete from leads where user_id = ? and id in (${placeholders})`,
-  });
-
-  return Number(result.rowsAffected ?? 0);
+  return Number(results[2].rowsAffected ?? 0);
 }
 
 export async function updateLeadStatus(userId: string, leadId: string, status: LeadStatus) {
