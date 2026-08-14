@@ -2,6 +2,8 @@
 
 > **Documento Central para o Time de Engenharia**
 > Este arquivo serve como o Single Source of Truth (SSOT) para arquitetura, regras de negócio, convenções de código, melhorias recentes e roadmap para desenvolvimento paralelo entre múltiplos desenvolvedores.
+>
+> 🆕 **Novo desenvolvedor?** Leia primeiro o [`ONBOARDING.md`](./ONBOARDING.md) — ele tem o passo a passo de setup, todos os acessos e credenciais.
 
 ---
 
@@ -98,9 +100,18 @@ Para evitar conflito entre branches em desenvolvimento paralelo:
   - Implementar consulta automática na API pública da Receita (`publica.cnpj.ws` ou BrasilAPI) para preencher Razão Social e Email caso a base local do Turso não esteja populada.
 - [ ] **Feature B (Validação Ativa de WhatsApp):**
   - Conectar provedores reais (Evolution API / Z-API / Baileys) em `src/lib/lead-qualification/whatsapp-validation-provider.ts` para verificar se o número está ativo no WhatsApp antes do disparo.
-- [ ] **Feature C (Disparo Automatizado em Funis):**
-  - Engine de execução de etapas agendadas em `lead_funnel_states` utilizando Cron / background workers.
-- [ ] **Feature D (Paginação Cursor no Turso):**
+- [x] **Feature B (Integração Evolution API / WhatsApp Nativo):**
+  - Módulo completo implementado: criação de instâncias por QR Code, leitura de status, disparo de mensagens.
+  - Arquivos: `src/lib/whatsapp/evolution-client.ts`, `src/lib/turso/whatsapp-instances-repository.ts`, rotas `app/api/whatsapp/*`, UI `app/app/conexoes/`.
+- [x] **Feature E (Nova Identidade Visual & VFX):**
+  - Canvas de partículas interativo com envelopes voando no rastro do mouse.
+  - Dark Header com alto contraste para logo oficial da marca.
+  - Domínio oficial: `https://publeads.vercel.app`.
+- [ ] **Feature C (Disparo em Lote com Delay Anti-Bloqueio):**
+  - Selecionar N leads da fila e disparar com delay randômico (20~45s) entre cada mensagem para proteger o chip.
+- [ ] **Feature D (Webhooks de Resposta do WhatsApp):**
+  - Receber eventos da Evolution API e atualizar status do lead no CRM automaticamente quando responder.
+- [ ] **Feature F (Paginação Cursor no Turso):**
   - Substituir o limite estático de 500 itens em `listLeads` por paginação baseada em cursor (`WHERE created_at < ? LIMIT ?`).
 
 ---
