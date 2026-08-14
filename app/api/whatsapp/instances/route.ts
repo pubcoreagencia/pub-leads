@@ -48,9 +48,8 @@ export async function POST(request: Request) {
     const { serverUrl, apiKey } = getEvolutionConfig();
 
     // Gera um nome único para a instância na Evolution API
-    // Formato: publeads_{primeiros 8 chars do userId}_{timestamp}
     const shortUserId = user.id.replace(/-/g, "").slice(0, 8);
-    const instanceName = `pl_${shortUserId}_${Date.now()}`;
+    const instanceName = `pub_${shortUserId}_${Date.now()}`;
 
     // 1. Cria a instância na Evolution API
     await createEvolutionInstance(serverUrl, apiKey, instanceName);
@@ -60,18 +59,15 @@ export async function POST(request: Request) {
     try {
       qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
     } catch {
-      // QR Code pode não estar disponível imediatamente — tudo bem
+      // QR Code pode ser obtido depois na checagem de status
     }
 
-    // 3. Persiste no Turso (armazena server_url e api_key para compatibilidade futura)
-    const instance = await createWhatsappInstance({
-      userId: user.id,
+    // 3. Persiste no Turso com a assinatura correta (userId, data)
+    const instance = await createWhatsappInstance(user.id, {
       name: name.trim(),
-      serverUrl,
-      apiKey,
-      instanceName,
-      status: qrcode?.base64 ? "qrcode" : "close",
-      qrCode: qrcode?.base64 ?? null,
+      server_url: serverUrl,
+      api_key: apiKey,
+      instance_name: instanceName,
     });
 
     return NextResponse.json({ instance, qrcode }, { status: 201 });
