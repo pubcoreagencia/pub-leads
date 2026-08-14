@@ -996,84 +996,34 @@ export function WhatsAppPageContent() {
             ))}
           </div>
 
-          <div className="grid min-w-0 gap-5 2xl:grid-cols-[minmax(360px,0.95fr)_minmax(500px,1.25fr)]">
-            <Card className={`${mobileTab === "queue" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-              <CardHeader>
-                <CardTitle>Fila de leads</CardTitle>
-                <div className="flex items-center justify-between gap-3 text-sm text-slate-500">
-                  <span>
-                    {hasLeadQueueFilters
-                      ? `${approachLeads.length} de ${baseApproachLeads.length} leads`
-                      : `${approachLeads.length} leads na fila`}
-                  </span>
-                  <label className="flex items-center gap-2 text-xs text-slate-600">
-                    <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" />
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[340px_1fr]">
+            {/* COLUNA ESQUERDA: FILA DE LEADS FOCADA */}
+            <Card className="border-slate-200 bg-white shadow-sm flex flex-col h-[750px]">
+              <CardHeader className="p-4 pb-3 border-b border-slate-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-bold text-slate-900">Fila de Contato</CardTitle>
+                    <p className="text-xs text-slate-500">{approachLeads.length} leads prontos</p>
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs font-medium text-slate-700 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-200 cursor-pointer">
+                    <input checked={onlyEligibleLeads} onChange={(event) => setOnlyEligibleLeads(event.target.checked)} type="checkbox" className="rounded text-red-600 focus:ring-red-500" />
                     Só WhatsApp
                   </label>
                 </div>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
                   <Input
-                    className="pl-9"
+                    className="pl-8 h-9 text-xs"
                     onChange={(event) => setLeadSearchQuery(event.target.value)}
-                    placeholder="Pesquisar lead por nome"
+                    placeholder="Buscar por nome da empresa..."
                     value={leadSearchQuery}
                   />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <select
-                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                    onChange={(event) => setLeadCapturePeriod(event.target.value as LeadCapturePeriod)}
-                    value={leadCapturePeriod}
-                  >
-                    <option value="all">Todas as datas</option>
-                    <option value="today">Capturados hoje</option>
-                    <option value="last_7_days">Últimos 7 dias</option>
-                    <option value="last_30_days">Últimos 30 dias</option>
-                  </select>
-                  <select
-                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                    onChange={(event) => setLeadNicheFilter(event.target.value)}
-                    value={leadNicheFilter}
-                  >
-                    <option value="all">Todos os nichos</option>
-                    {leadNicheOptions.map((category) => (
-                      <option key={category} value={normalizeSearchText(category)}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="h-10 rounded-md border border-input bg-white px-3 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                    onChange={(event) => setLeadQueueSort(event.target.value as LeadQueueSort)}
-                    value={leadQueueSort}
-                  >
-                    <option value="newest">Mais recentes primeiro</option>
-                    <option value="oldest">Primeiros capturados</option>
-                    <option value="name_asc">Nome A-Z</option>
-                    <option value="niche_asc">Nicho A-Z</option>
-                  </select>
-                </div>
-                {hasLeadQueueFilters ? (
-                  <Button
-                    className="w-full"
-                    onClick={() => {
-                      setLeadSearchQuery("");
-                      setLeadCapturePeriod("all");
-                      setLeadNicheFilter("all");
-                      setLeadQueueSort("newest");
-                    }}
-                    type="button"
-                    variant="outline"
-                  >
-                    Limpar filtros
-                  </Button>
-                ) : null}
               </CardHeader>
-              <CardContent className="max-h-[680px] space-y-2 overflow-y-auto">
+              <CardContent className="p-2 space-y-1.5 overflow-y-auto flex-1">
                 {approachLeads.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-500">
-                    Nenhum lead encontrado para essa busca.
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs leading-5 text-slate-500">
+                    Nenhum lead encontrado com os filtros atuais.
                   </div>
                 ) : null}
                 {approachLeads.map((lead, index) => {
@@ -1082,65 +1032,28 @@ export function WhatsAppPageContent() {
 
                   return (
                     <article
-                      className={`cursor-pointer rounded-md border p-3 transition ${
-                        active ? "border-red-300 bg-red-50" : "border-slate-200 hover:border-red-200 hover:bg-slate-50"
+                      className={`cursor-pointer rounded-lg border p-3 transition-all ${
+                        active
+                          ? "border-red-500 bg-red-50/70 shadow-sm"
+                          : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
                       }`}
                       key={lead.id}
                       onClick={() => {
                         setLeadId(lead.id);
-                        setMobileTab("funnel");
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setLeadId(lead.id);
-                          setMobileTab("funnel");
-                        }
+                        setMobileTab("message");
                       }}
                       role="button"
                       tabIndex={0}
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-950">{lead.name}</p>
-                          <p className="mt-1 truncate text-xs text-slate-500">
-                            {[lead.city, lead.category].filter(Boolean).join(" · ") || "Sem contexto"}
+                          <p className="truncate text-sm font-semibold text-slate-900">{lead.name}</p>
+                          <p className="truncate text-xs text-slate-500">
+                            {[lead.city, lead.category].filter(Boolean).join(" · ") || "Lead local"}
                           </p>
-                          <p className="mt-1 text-[11px] text-slate-400">Capturado em {formatDate(lead.created_at)}</p>
                         </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <span className="text-xs text-slate-400">{index + 1}</span>
-                          <button
-                            aria-label={`Abrir configurações de ${lead.name}`}
-                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              openLeadSettings(lead);
-                            }}
-                            type="button"
-                          >
-                            <Settings2 className="h-4 w-4" />
-                          </button>
-                          <button
-                            aria-label={`Excluir ${lead.name}`}
-                            className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-100 hover:text-red-700"
-                            disabled={isDeletingLead}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void handleDeleteLeadFromQueue(lead);
-                            }}
-                            type="button"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${hasPhone ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                          {hasPhone ? "WhatsApp possível" : "Sem WhatsApp"}
-                        </span>
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                          {active && state ? funnelStatusLabels[state.status] : "Funil"}
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${hasPhone ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500"}`}>
+                          {hasPhone ? "WhatsApp" : "Sem fone"}
                         </span>
                       </div>
                     </article>
@@ -1149,264 +1062,179 @@ export function WhatsAppPageContent() {
               </CardContent>
             </Card>
 
-            <div className={`${mobileTab === "queue" ? "hidden" : "block"} grid min-w-0 gap-5 xl:grid xl:grid-cols-[minmax(270px,0.68fr)_minmax(420px,1fr)] 2xl:block`}>
-            <div className={`${mobileTab === "copies" || mobileTab === "funnel" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
-            <Card className={`${mobileTab === "copies" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-              <CardHeader>
-                <CardTitle>Copys registradas</CardTitle>
-                <p className="text-sm leading-6 text-slate-500">
-                  Cole uma copy inteira, salve como roteiro e alterne entre os funis registrados.
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Copy ativa
-                  <select
-                    className="h-10 rounded-md border border-input bg-white px-3 text-sm font-normal outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                    onChange={(event) => handleSelectFunnel(event.target.value)}
-                    value={selectedFunnel?.id ?? ""}
-                  >
-                    {funnels.map((funnel) => (
-                      <option key={funnel.id} value={funnel.id}>
-                        {funnel.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Button onClick={handleStartCreateCopy} type="button">
-                    <Sparkles className="h-4 w-4" />
-                    Criar nova copy
-                  </Button>
-                  <Button
-                    disabled={!canEditSelectedCopy}
-                    onClick={handleStartEditCopy}
-                    title={canEditSelectedCopy ? "Editar a copy selecionada" : "Selecione uma copy para editar"}
-                    type="button"
-                    variant="outline"
-                  >
-                    Editar copy
-                  </Button>
-                  <Button
-                    disabled={!canDeleteSelectedCopy || isSavingCopyFunnel}
-                    onClick={handleDeleteCopyFunnel}
-                    title={canDeleteSelectedCopy ? "Apagar a copy selecionada" : "Selecione uma copy para apagar"}
-                    type="button"
-                    variant="outline"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Apagar copy
-                  </Button>
-                </div>
-                {copyFormMode === "view" ? (
-                  <p className="rounded-md bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-500">
-                    Selecione uma copy para usar no funil. Para mudar o conteudo, clique em Editar copy; para cadastrar outra,
-                    clique em Criar nova copy.
-                  </p>
-                ) : null}
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Nome da copy
-                  <Input
-                    disabled={copyFormMode === "view"}
-                    onChange={(event) => setCopyFunnelName(event.target.value)}
-                    placeholder="Ex: PUB Start - clínicas"
-                    value={copyFunnelName}
-                  />
-                </label>
-                <label className="grid gap-2 text-sm font-medium text-slate-700">
-                  Copy base inteira
-                  <textarea
-                    className="min-h-52 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 disabled:bg-slate-50 disabled:text-slate-500"
-                    disabled={copyFormMode === "view"}
-                    onChange={(event) => setFullBaseCopy(event.target.value)}
-                    placeholder="Cole a sequência completa aqui. Separe os passos por linhas em branco para o sistema transformar em funil."
-                    value={fullBaseCopy}
-                  />
-                </label>
-                {copyFormMode !== "view" ? (
-                  <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                    <Button
-                      disabled={isSavingCopyFunnel || copyFunnelName.trim().length < 2 || fullBaseCopy.trim().length < 10}
-                      onClick={copyFormMode === "create" ? handleCreateCopyFunnel : handleUpdateCopyFunnel}
-                      type="button"
-                    >
-                      {isSavingCopyFunnel ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                      {copyFormMode === "create" ? "Salvar nova copy" : "Salvar alteracoes"}
-                    </Button>
-                    <Button disabled={isSavingCopyFunnel} onClick={handleCancelCopyForm} type="button" variant="outline">
-                      Cancelar
-                    </Button>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-
-            <Card className={`${mobileTab === "funnel" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-              <CardHeader>
-                <CardTitle>{selectedFunnel.name}</CardTitle>
-                <p className="text-sm leading-6 text-slate-500">{selectedFunnel.description}</p>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {isLoadingState ? (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Loader2 className="h-4 w-4 animate-spin text-red-600" />
-                    Carregando estado...
-                  </div>
-                ) : null}
-                {selectedFunnel.steps.map((step) => {
-                  const active = step.id === activeStep?.id;
-                  const completed = state ? step.step_order < state.current_step_order : false;
-
-                  return (
-                    <button
-                      className={`w-full rounded-lg border p-3 text-left transition ${
-                        active ? "border-red-300 bg-red-50" : completed ? "border-emerald-200 bg-emerald-50/50" : "border-slate-200 hover:bg-slate-50"
-                      }`}
-                      key={step.id}
-                      onClick={() => {
-                        setActiveStepId(step.id);
-                        setMobileTab("message");
-                      }}
-                      type="button"
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${active ? "bg-red-600 text-white" : "bg-slate-100 text-slate-600"}`}>
-                          {step.step_order}
+            {/* COLUNA DIREITA: ESPAÇO DE DISPARO RÁPIDO DO OPERADOR */}
+            <div className="space-y-4">
+              {/* CARD PRINCIPAL DO LEAD ATIVO */}
+              <Card className="border-slate-200 bg-white shadow-sm">
+                <CardHeader className="p-5 pb-4 border-b border-slate-100">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <CardTitle className="text-xl font-bold text-slate-900">{getLeadCompany(selectedLead)}</CardTitle>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700">
+                          {[selectedLead?.city, selectedLead?.category].filter(Boolean).join(" · ") || "Sem contexto"}
                         </span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-slate-950">{step.name}</p>
-                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{step.objective}</p>
-                        </div>
                       </div>
-                    </button>
-                  );
-                })}
-              </CardContent>
-            </Card>
-            </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Telefone: <strong className="text-slate-800">{getLeadPhone(selectedLead) || "Nenhum cadastrado"}</strong>
+                      </p>
+                    </div>
 
-            <div className={`${mobileTab === "message" || mobileTab === "action" ? "block" : "hidden"} min-w-0 space-y-5 xl:block`}>
-              <Card className={`${mobileTab === "message" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-                <CardHeader>
-                  <CardTitle>Copy para WhatsApp</CardTitle>
-                  <p className="text-sm leading-6 text-slate-500">
-                    {activeStep ? `Base do passo ${activeStep.step_order} — ${activeStep.name}` : "Selecione um passo do funil."}
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-                    <p className="font-semibold text-slate-950">{getLeadCompany(selectedLead)}</p>
-                    <p className="mt-1">
-                      {[selectedLead?.city, selectedLead?.category].filter(Boolean).join(" · ") || "Sem contexto"}
-                    </p>
-                    <p className="mt-1 text-xs">{state ? funnelStatusLabels[state.status] : "Não iniciado"}</p>
+                    {/* SELEÇÃO RÁPIDA DE ROTEIRO / COPY */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-slate-500">Roteiro:</span>
+                      <select
+                        className="h-9 rounded-md border border-slate-200 bg-slate-50 px-2.5 text-xs font-medium text-slate-800 outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
+                        onChange={(event) => handleSelectFunnel(event.target.value)}
+                        value={selectedFunnel?.id ?? ""}
+                      >
+                        {funnels.map((funnel) => (
+                          <option key={funnel.id} value={funnel.id}>
+                            {funnel.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Copy base
+
+                  {/* ETAPAS DO FUNIL EM FORMATO DE PÍLULAS SIMPLES */}
+                  <div className="flex flex-wrap items-center gap-2 pt-3">
+                    <span className="text-xs font-medium text-slate-400">Etapa:</span>
+                    {selectedFunnel?.steps.map((step) => {
+                      const active = step.id === activeStep?.id;
+                      return (
+                        <button
+                          className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                            active
+                              ? "bg-red-600 text-white shadow-sm"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                          key={step.id}
+                          onClick={() => setActiveStepId(step.id)}
+                          type="button"
+                        >
+                          Passo {step.step_order}: {step.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="p-5 space-y-4">
+                  {/* TEXTO DA MENSAGEM */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                        Mensagem Pronta para Envio
+                      </label>
+                      <Button
+                        disabled={isActing || !selectedLead || baseCopy.trim().length < 10}
+                        onClick={handleDiversifyStep}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                        className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Sparkles className="mr-1 h-3.5 w-3.5" />
+                        Gerar Variação IA
+                      </Button>
+                    </div>
+
                     <textarea
-                      className="min-h-40 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                      onChange={(event) => {
-                        setBaseCopy(event.target.value);
-                        setMessage(event.target.value);
-                      }}
-                      placeholder="Cole aqui a copy que deve ser diversificada"
-                      value={baseCopy}
-                    />
-                  </label>
-                  <label className="grid gap-2 text-sm font-medium text-slate-700">
-                    Mensagem diversificada
-                    <textarea
-                      className="min-h-44 w-full rounded-md border border-input bg-white p-4 text-sm font-normal leading-6 outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100 xl:min-h-52"
+                      className="min-h-[160px] w-full rounded-lg border border-slate-200 bg-slate-50/50 p-4 text-sm font-normal text-slate-900 leading-relaxed outline-none focus:border-red-500 focus:bg-white focus:ring-2 focus:ring-red-100 transition"
                       onChange={(event) => setMessage(event.target.value)}
                       value={message}
                     />
-                  </label>
-                  {activeStep?.wait_hint ? (
-                    <p className="text-xs leading-5 text-slate-500">{activeStep.wait_hint}</p>
-                  ) : null}
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Button disabled={isActing || !selectedLead || baseCopy.trim().length < 10} onClick={handleDiversifyStep} type="button" variant="outline">
-                      <Sparkles className="h-4 w-4" />
-                      Diversificar copy
+                  </div>
+
+                  {/* BOTÕES DE AÇÃO PRINCIPAL - CLIQUE ÚNICO */}
+                  <div className="grid gap-3 sm:grid-cols-2 pt-2">
+                    <Button
+                      className="h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2"
+                      disabled={!message || !workspaceWaLink || isActing}
+                      onClick={handleOpenWhatsApp}
+                      type="button"
+                    >
+                      <MessageCircle className="h-5 w-5" />
+                      {usesMobileWhatsappApp ? "Abrir no WhatsApp" : "Enviar no WhatsApp Web"}
                     </Button>
-                    <Button disabled={!message || isActing} onClick={handleCopyMessage} type="button">
+
+                    <Button
+                      className="h-12 text-sm font-semibold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-2"
+                      disabled={!message || isActing}
+                      onClick={handleCopyMessage}
+                      type="button"
+                      variant="outline"
+                    >
                       <Clipboard className="h-4 w-4" />
-                      Copiar mensagem
+                      Copiar Mensagem
                     </Button>
+                  </div>
+
+                  {/* BARRA DE PROGRESSO DO OPERADOR */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isActing}
+                        onClick={() => recordEvent("marked_sent")}
+                        className="text-xs text-slate-700"
+                      >
+                        <Send className="mr-1 h-3.5 w-3.5 text-blue-600" />
+                        Marcar como Enviado
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isActing}
+                        onClick={() => recordEvent("marked_replied")}
+                        className="text-xs text-slate-700"
+                      >
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5 text-emerald-600" />
+                        Marcar que Respondeu
+                      </Button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={isActing}
+                        onClick={() => recordEvent("skipped")}
+                        className="text-xs text-slate-500"
+                      >
+                        Pular
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleNextLead}
+                        className="text-xs bg-slate-900 text-white hover:bg-slate-800"
+                      >
+                        Próximo Lead
+                        <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className={`${mobileTab === "action" ? "block" : "hidden"} border-slate-200 bg-white shadow-sm xl:block`}>
-                <CardHeader>
-                  <CardTitle>Ação manual</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <Button className="w-full" disabled={!message || !workspaceWaLink || isActing} onClick={handleOpenWhatsApp} type="button">
-                    <MessageCircle className="h-4 w-4" />
-                    {usesMobileWhatsappApp ? "Abrir no app WhatsApp" : "Enviar para WhatsApp Web"}
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                  <p className="text-xs leading-5 text-slate-500">
-                    {usesMobileWhatsappApp ? (
-                      "No celular, a mensagem abre direto no app do WhatsApp para envio manual."
-                    ) : (
-                      "A primeira abertura cria o workspace do WhatsApp Web. As próximas mensagens reutilizam a mesma aba."
-                    )}
-                  </p>
-                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_sent")} type="button" variant="outline">
-                    <Send className="h-4 w-4" />
-                    Marcar como enviado
-                  </Button>
-                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("marked_replied")} type="button" variant="outline">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Marcar que respondeu
-                  </Button>
-                  <Button className="w-full" disabled={isActing} onClick={handleAdvanceStep} type="button" variant="outline">
-                    Avançar etapa
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                  <Button className="w-full" disabled={isActing} onClick={() => recordEvent("skipped")} type="button" variant="ghost">
-                    Pular lead
-                  </Button>
-                  <Button className="w-full" onClick={handleNextLead} type="button" variant="ghost">
-                    <SkipForward className="h-4 w-4" />
-                    Próximo lead
-                  </Button>
-
-                  {!getLeadPhone(selectedLead) ? (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-800">
-                      Lead sem WhatsApp válido. Use um canal alternativo ou pause a abordagem.
-                    </div>
+              {/* CANAIS ALTERNATIVOS SIMPLES SE PRECISAR */}
+              {(instagramUrl || websiteUrl) ? (
+                <div className="flex items-center gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200">
+                  <span className="text-xs font-semibold text-slate-500">Outros canais:</span>
+                  {instagramUrl ? (
+                    <Button size="sm" variant="outline" onClick={() => openAlternative(instagramUrl, "instagram")} className="h-8 text-xs text-pink-700 border-pink-200 bg-pink-50/50 hover:bg-pink-100">
+                      <Instagram className="mr-1.5 h-3.5 w-3.5" /> Instagram
+                    </Button>
                   ) : null}
-                  {instagramUrl ? <Button className="w-full" onClick={() => openAlternative(instagramUrl, "instagram")} type="button" variant="outline"><Instagram className="h-4 w-4 text-pink-600" /> Abrir Instagram</Button> : null}
-                  {websiteUrl ? <Button className="w-full" onClick={() => openAlternative(websiteUrl, "instagram")} type="button" variant="outline"><Globe2 className="h-4 w-4" /> Abrir site</Button> : null}
-                </CardContent>
-              </Card>
-
-              <Card className="border-slate-200 bg-white shadow-sm">
-                <CardHeader>
-                  <CardTitle>Histórico da abordagem</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {events.length === 0 ? (
-                    <p className="rounded-md border border-dashed border-slate-300 p-4 text-sm text-slate-500">
-                      Nenhuma ação registrada neste lead ainda.
-                    </p>
-                  ) : (
-                    events.slice(0, 8).map((event) => (
-                      <div className="rounded-md border border-slate-200 bg-slate-50 p-3" key={event.id}>
-                        <p className="text-sm font-semibold text-slate-950">
-                          {eventLabels[event.event_type] ?? event.event_type}
-                          {event.step_order ? ` · passo ${event.step_order}` : ""}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">{formatDate(event.created_at)}</p>
-                      </div>
-                    ))
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                  {websiteUrl ? (
+                    <Button size="sm" variant="outline" onClick={() => openAlternative(websiteUrl, "instagram")} className="h-8 text-xs text-blue-700 border-blue-200 bg-blue-50/50 hover:bg-blue-100">
+                      <Globe2 className="mr-1.5 h-3.5 w-3.5" /> Visitar Site
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
