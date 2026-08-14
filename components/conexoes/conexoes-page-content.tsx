@@ -4,12 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
   Copy,
-  KeyRound,
   Loader2,
   MessageCircle,
-  Phone,
   Plus,
-  QrCode,
   RefreshCw,
   Smartphone,
   Trash2,
