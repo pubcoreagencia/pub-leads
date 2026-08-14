@@ -36,7 +36,7 @@ export async function createEvolutionInstance(serverUrl: string, apiKey: string,
       qrcode: true,
       integration: "WHATSAPP-BAILEYS",
     }),
-    signal: AbortSignal.timeout(45000), // Tolera cold start do Render Free
+    signal: AbortSignal.timeout(45000),
   });
 
   if (!response.ok && response.status !== 403) {
@@ -121,7 +121,7 @@ export async function sendEvolutionTextMessage(
       text,
       linkPreview: false,
     }),
-    signal: AbortSignal.timeout(30000),
+    signal: AbortSignal.timeout(8000), // Timeout ágil de 8s para não prender o operador
   });
 
   if (!response.ok) {
