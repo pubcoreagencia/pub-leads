@@ -1055,9 +1055,9 @@ export function WhatsAppPageContent() {
             ))}
           </div>
 
-          <div className="grid min-w-0 gap-5 lg:grid-cols-[340px_1fr]">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)]">
             {/* COLUNA ESQUERDA: FILA DE LEADS FOCADA */}
-            <Card className="border-slate-200 bg-white shadow-sm flex flex-col h-[750px]">
+            <Card className="border-slate-200 bg-white shadow-sm flex flex-col min-h-[450px] lg:h-[calc(100vh-210px)] max-h-[850px]">
               <CardHeader className="p-4 pb-3 border-b border-slate-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1228,7 +1228,7 @@ export function WhatsAppPageContent() {
                   {/* BOTÕES DE AÇÃO PRINCIPAL - CLIQUE ÚNICO */}
                   <div className="grid gap-3 sm:grid-cols-2 pt-2">
                     <Button
-                      className="h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2"
+                      className="min-h-12 h-auto py-2.5 px-4 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center justify-center gap-2 text-center break-words"
                       disabled={!message || !getLeadPhone(selectedLead) || isActing}
                       onClick={handleSendNativeWhatsApp}
                       type="button"
@@ -1238,7 +1238,7 @@ export function WhatsAppPageContent() {
                     </Button>
 
                     <Button
-                      className="h-12 text-sm font-semibold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-2"
+                      className="min-h-12 h-auto py-2.5 px-4 text-sm font-semibold border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center justify-center gap-2 text-center break-words"
                       disabled={!message || !workspaceWaLink || isActing}
                       onClick={handleOpenWhatsApp}
                       type="button"
