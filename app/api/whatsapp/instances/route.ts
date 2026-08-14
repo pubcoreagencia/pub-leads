@@ -10,8 +10,6 @@ import {
 } from "@/src/lib/whatsapp/evolution-client";
 import { getEvolutionConfig, hasEvolutionConfig } from "@/src/lib/whatsapp/config";
 
-export const maxDuration = 45;
-
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -52,8 +50,7 @@ export async function POST(request: Request) {
     // 1. Cria a instância na Evolution API (já retorna o QR Code diretamente)
     const { qrcode: directQr } = await createEvolutionInstance(serverUrl, apiKey, instanceName);
 
-    let qrcode = directQr;
-    // Se não veio de primeira, tenta um fallback rápido
+    let qrcode: { base64: string | null; code: string | null } | null = directQr;
     if (!qrcode?.base64) {
       try {
         qrcode = await getEvolutionQRCode(serverUrl, apiKey, instanceName);
