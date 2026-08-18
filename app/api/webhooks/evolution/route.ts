@@ -47,11 +47,7 @@ export async function POST(request: Request) {
       const match3 = l.phone_2 ? normalizePhoneForEvolution(l.phone_2) === senderPhone : false;
       return match1 || match2 || match3;
     });
-      const match1 = l.whatsapp ? normalizePhoneForEvolution(l.whatsapp) === senderPhone : false;
-      const match2 = l.phone ? normalizePhoneForEvolution(l.phone) === senderPhone : false;
-      const match3 = l.phone_2 ? normalizePhoneForEvolution(l.phone_2) === senderPhone : false;
-      return match1 || match2 || match3;
-    });
+
 
     if (lead) {
       console.log(`Lead replied! Lead ID: ${lead.id}`);
