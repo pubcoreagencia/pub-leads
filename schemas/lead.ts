@@ -105,6 +105,8 @@ export type LeadFilters = {
   name?: string;
   city?: string;
   category?: string;
+  search?: string;
+  statuses?: LeadStatus[];
   status?: LeadStatus | "all";
   source?: LeadSource | "all";
   onlyWithPhone?: boolean;

@@ -36,13 +36,17 @@ export async function POST(request: Request) {
     }
 
     // Load leads for this user to find a match
-    const leadsResponse = await listLeads(instance.user_id, {
+    const leads = await listLeads(instance.user_id, {
       limit: 10000,
-      search: "",
       statuses: ["contacted", "qualified", "proposal", "new"],
     });
 
-    const lead = leadsResponse.items.find((l) => {
+    const lead = leads.find((l) => {
+      const match1 = l.whatsapp ? normalizePhoneForEvolution(l.whatsapp) === senderPhone : false;
+      const match2 = l.phone ? normalizePhoneForEvolution(l.phone) === senderPhone : false;
+      const match3 = l.phone_2 ? normalizePhoneForEvolution(l.phone_2) === senderPhone : false;
+      return match1 || match2 || match3;
+    });
       const match1 = l.whatsapp ? normalizePhoneForEvolution(l.whatsapp) === senderPhone : false;
       const match2 = l.phone ? normalizePhoneForEvolution(l.phone) === senderPhone : false;
       const match3 = l.phone_2 ? normalizePhoneForEvolution(l.phone_2) === senderPhone : false;
