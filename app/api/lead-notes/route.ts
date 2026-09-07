@@ -1,220 +1,202 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { prisma } from '@/lib/prisma';
-import { requireAuth } from '@/lib/auth';
-import { rateLimit } from '@/lib/rate-limit';
-import { logger } from '@/lib/logger';
 
 /**
- * GET /api/lead-notes
- * Lista notas de leads com filtros avançados, paginação cursor-based e
- * projeção otimizada. Suporta busca full-text, filtros por lead, autor,
- * tipo e intervalo de datas. Ordena por pinned first, depois updatedAt desc.
+ * Lead Notes API Route
+ * 
+ * Endpoints:
+ * - GET  /api/lead-notes         -> List notes (paginated, filterable by leadId)
+ * - POST /api/lead-notes         -> Create a new note attached to a lead
+ * - PATCH/DELETE handled in [id]/route.ts (future route)
+ *
+ * Storage: In-memory store for the prototype. Replace with Prisma/Drizzle/Postgres
+ * when wiring the real database.
  */
 
-const QuerySchema = z.object({
-  cursor: z.string().uuid().optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  leadId: z.string().uuid().optional(),
-  authorId: z.string().uuid().optional(),
-  type: z.enum(['GENERAL', 'CALL', 'MEETING', 'TASK', 'FOLLOW_UP', 'COMPLAINT', 'OPPORTUNITY']).optional(),
-  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'URGENT']).optional(),
-  pinned: z.coerce.boolean().optional(),
-  search: z.string().trim().min(1).max(200).optional(),
-  startDate: z.coerce.date().optional(),
-  endDate: z.coerce.date().optional(),
-  includeDeleted: z.coerce.boolean().default(false),
-});
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Cache-Control': 'private, max-age=10, stale-while-revalidate=30',
-};
-
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+// ---------- Types ----------
+interface LeadNote {
+  id: string;
+  leadId: string;
+  authorId: string;
+  body: string;
+  tags: string[];
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
+// ---------- In-Memory Store ----------
+const store: Map<string, LeadNote> = (() => {
+  const globalKey = '__pub_leads_notes_store__';
+  const g = globalThis as unknown as Record<string, unknown>;
+  if (!g[globalKey]) {
+    const m = new Map<string, LeadNote>();
+    // Seed with one example note to make the endpoint immediately useful.
+    const now = new Date().toISOString();
+    m.set('seed_1', {
+      id: 'seed_1',
+      leadId: 'demo-lead',
+      authorId: 'system',
+      body: 'Lead demonstrativo importado via scraping.',
+      tags: ['demo', 'scraping'],
+      pinned: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    g[globalKey] = m;
+  }
+  return g[globalKey] as Map<string, LeadNote>;
+})();
+
+// ---------- Validation Schemas ----------
+const createNoteSchema = z.object({
+  leadId: z.string().min(1, 'leadId is required').max(128),
+  authorId: z.string().min(1, 'authorId is required').max(128),
+  body: z.string().min(1, 'body cannot be empty').max(4000),
+  tags: z.array(z.string().min(1).max(32)).max(20).optional().default([]),
+  pinned: z.boolean().optional().default(false),
+});
+
+const listQuerySchema = z.object({
+  leadId: z.string().min(1).optional(),
+  authorId: z.string().min(1).optional(),
+  tag: z.string().min(1).optional(),
+  pinned: z
+    .union([z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  page: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .default('1')
+    .transform((v) => Math.max(1, parseInt(v, 10))),
+  pageSize: z
+    .string()
+    .regex(/^\d+$/)
+    .optional()
+    .default('20')
+    .transform((v) => Math.min(100, Math.max(1, parseInt(v, 10)))),
+});
+
+// ---------- Helpers ----------
+function generateId(): string {
+  // Lightweight RFC4122-ish identifier without external deps.
+  return (
+    Date.now().toString(36) +
+    '-' +
+    Math.random().toString(36).slice(2, 10) +
+    '-' +
+    Math.random().toString(36).slice(2, 10)
+  );
+}
+
+function paginate<T>(items: T[], page: number, pageSize: number) {
+  const total = items.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize;
+  return {
+    data: items.slice(start, end),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    },
+  };
+}
+
+function jsonError(message: string, status: number, details?: unknown) {
+  return NextResponse.json(
+    { ok: false, error: message, details },
+    { status }
+  );
+}
+
+function jsonOk<T>(data: T, status = 200, extra?: Record<string, unknown>) {
+  return NextResponse.json(
+    { ok: true, data, ...(extra ?? {}) },
+    { status }
+  );
+}
+
+// ---------- Handlers ----------
 export async function GET(req: NextRequest) {
-  const requestId = crypto.randomUUID();
-  const log = logger.child({ requestId, route: 'GET /api/lead-notes' });
-
   try {
-    const auth = await requireAuth(req);
-    if (!auth.ok) {
-      return NextResponse.json(
-        { error: 'unauthorized', message: auth.reason },
-        { status: 401, headers: CORS_HEADERS }
-      );
-    }
+    const url = new URL(req.url);
+    const parsed = listQuerySchema.safeParse(Object.fromEntries(url.searchParams));
 
-    const rl = await rateLimit({
-      key: `lead-notes:list:${auth.user.tenantId}:${auth.user.id}`,
-      limit: 120,
-      windowMs: 60_000,
-    });
-    if (!rl.allowed) {
-      return NextResponse.json(
-        { error: 'rate_limited', retryAfter: rl.retryAfter },
-        { status: 429, headers: { ...CORS_HEADERS, 'Retry-After': String(rl.retryAfter) } }
-      );
-    }
-
-    const { searchParams } = new URL(req.url);
-    const parsed = QuerySchema.safeParse(Object.fromEntries(searchParams));
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'invalid_query', issues: parsed.error.flatten() },
-        { status: 400, headers: CORS_HEADERS }
-      );
+      return jsonError('Invalid query parameters', 400, parsed.error.flatten());
     }
 
-    const params = parsed.data;
+    const { leadId, authorId, tag, pinned, page, pageSize } = parsed.data;
 
-    if (params.startDate && params.endDate && params.startDate > params.endDate) {
-      return NextResponse.json(
-        { error: 'invalid_date_range', message: 'startDate must be before endDate' },
-        { status: 400, headers: CORS_HEADERS }
-      );
-    }
+    let notes = Array.from(store.values());
 
-    const where: any = {
-      tenantId: auth.user.tenantId,
-    };
+    if (leadId) notes = notes.filter((n) => n.leadId === leadId);
+    if (authorId) notes = notes.filter((n) => n.authorId === authorId);
+    if (typeof pinned === 'boolean') notes = notes.filter((n) => n.pinned === pinned);
+    if (tag) notes = notes.filter((n) => n.tags.includes(tag));
 
-    if (!params.includeDeleted) {
-      where.deletedAt = null;
-    }
-
-    if (params.leadId) where.leadId = params.leadId;
-    if (params.authorId) where.authorId = params.authorId;
-    if (params.type) where.type = params.type;
-    if (params.priority) where.priority = params.priority;
-    if (typeof params.pinned === 'boolean') where.pinned = params.pinned;
-
-    if (params.startDate || params.endDate) {
-      where.createdAt = {};
-      if (params.startDate) where.createdAt.gte = params.startDate;
-      if (params.endDate) where.createdAt.lte = params.endDate;
-    }
-
-    if (params.search) {
-      where.OR = [
-        { title: { contains: params.search, mode: 'insensitive' } },
-        { content: { contains: params.search, mode: 'insensitive' } },
-        { tags: { has: params.search.toLowerCase() } },
-      ];
-    }
-
-    if (params.cursor) {
-      const cursorNote = await prisma.leadNote.findFirst({
-        where: { id: params.cursor, tenantId: auth.user.tenantId },
-        select: { pinned: true, updatedAt: true, id: true },
-      });
-      if (!cursorNote) {
-        return NextResponse.json(
-          { error: 'invalid_cursor' },
-          { status: 400, headers: CORS_HEADERS }
-        );
-      }
-      where.OR = [
-        ...(where.OR ?? []),
-        { pinned: { lt: cursorNote.pinned } },
-        {
-          AND: [
-            { pinned: { equals: cursorNote.pinned } },
-            { updatedAt: { lt: cursorNote.updatedAt } },
-          ],
-        },
-        {
-          AND: [
-            { pinned: { equals: cursorNote.pinned } },
-            { updatedAt: { equals: cursorNote.updatedAt } },
-            { id: { lt: cursorNote.id } },
-          ],
-        },
-      ];
-    }
-
-    const notes = await prisma.leadNote.findMany({
-      where,
-      orderBy: [
-        { pinned: 'desc' },
-        { updatedAt: 'desc' },
-        { id: 'desc' },
-      ],
-      take: params.limit + 1,
-      select: {
-        id: true,
-        title: true,
-        content: true,
-        type: true,
-        priority: true,
-        pinned: true,
-        tags: true,
-        metadata: true,
-        lead: {
-          select: {
-            id: true,
-            name: true,
-            company: true,
-            status: true,
-          },
-        },
-        author: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            avatarUrl: true,
-          },
-        },
-        createdAt: true,
-        updatedAt: true,
-      },
+    // Pinned first, then most recent.
+    notes.sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      return b.createdAt.localeCompare(a.createdAt);
     });
 
-    const hasNextPage = notes.length > params.limit;
-    const items = hasNextPage ? notes.slice(0, params.limit) : notes;
-    const nextCursor = hasNextPage ? items[items.length - 1].id : null;
-
-    const aggregate = await prisma.leadNote.aggregate({
-      where: { ...where, OR: undefined, id: undefined },
-      _count: { _all: true },
-      _avg: { priorityRank: true },
-    }).catch(() => null);
-
-    log.info(
-      { count: items.length, hasNextPage, filters: Object.keys(params) },
-      'lead notes list fetched'
-    );
-
-    return NextResponse.json(
-      {
-        data: items.map((n) => ({
-          ...n,
-          createdAt: n.createdAt.toISOString(),
-          updatedAt: n.updatedAt.toISOString(),
-        })),
-        pagination: {
-          nextCursor,
-          hasNextPage,
-          limit: params.limit,
-        },
-        meta: {
-          totalApprox: aggregate?._count?._all ?? null,
-          requestId,
-        },
-      },
-      { status: 200, headers: CORS_HEADERS }
-    );
-  } catch (err: any) {
-    log.error({ err: err?.message, stack: err?.stack }, 'failed to list lead notes');
-    return NextResponse.json(
-      { error: 'internal_error', requestId },
-      { status: 500, headers: CORS_HEADERS }
+    const result = paginate(notes, page, pageSize);
+    return jsonOk(result.data, 200, { pagination: result.pagination });
+  } catch (err) {
+    return jsonError(
+      'Internal error while listing notes',
+      500,
+      err instanceof Error ? { message: err.message } : undefined
     );
   }
 }
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return jsonError('Request body must be a JSON object', 400);
+    }
+
+    const parsed = createNoteSchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError('Invalid note payload', 422, parsed.error.flatten());
+    }
+
+    const { leadId, authorId, body: noteBody, tags, pinned } = parsed.data;
+    const now = new Date().toISOString();
+
+    const note: LeadNote = {
+      id: generateId(),
+      leadId,
+      authorId,
+      body: noteBody.trim(),
+      tags: Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean))),
+      pinned,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    store.set(note.id, note);
+
+    return jsonOk(note, 201);
+  } catch (err) {
+    return jsonError(
+      'Internal error while creating note',
+      500,
+      err instanceof Error ? { message: err.message } : undefined
+    );
+  }
+}
+
+// ---------- Route Config ----------
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
