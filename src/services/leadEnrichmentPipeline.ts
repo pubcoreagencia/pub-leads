@@ -1,7 +1,7 @@
 /**
  * Pub Leads - Pipeline Autônomo de Enriquecimento e Scoring
  * Gerado autonomamente pela Central de Agentes da Pub Core
- * Ciclo: #1 | Agente: reviewer
+ * Ciclo: #10 | Agente: architect
  */
 
 export interface RawLeadInput {
