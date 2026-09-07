@@ -2,201 +2,242 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 /**
- * Lead Notes API Route
- * 
- * Endpoints:
- * - GET  /api/lead-notes         -> List notes (paginated, filterable by leadId)
- * - POST /api/lead-notes         -> Create a new note attached to a lead
- * - PATCH/DELETE handled in [id]/route.ts (future route)
- *
- * Storage: In-memory store for the prototype. Replace with Prisma/Drizzle/Postgres
- * when wiring the real database.
+ * pub-leads :: Lead Notes API
+ * -----------------------
+ * CRUD minimalista para anotações internas sobre leads B2B.
+ * Persistência em memória (substituível por Postgres/Prisma depois).
+ * Ideal para uso em timeline / activity feed do lead.
  */
 
-// ---------- Types ----------
-interface LeadNote {
+// Em produção, substituir por Prisma + Postgres. Aqui mantemos em memória
+// para viabilizar testes locais sem dependência de banco.
+type LeadNote = {
   id: string;
   leadId: string;
   authorId: string;
-  body: string;
-  tags: string[];
-  pinned: boolean;
+  content: string;
   createdAt: string;
   updatedAt: string;
+};
+
+// Singleton em escopo de módulo (sobrevive entre requests no mesmo processo)
+declare global {
+  // eslint-disable-next-line no-var
+  var __pubLeadsNotesStore: Map<string, LeadNote[]> | undefined;
 }
 
-// ---------- In-Memory Store ----------
-const store: Map<string, LeadNote> = (() => {
-  const globalKey = '__pub_leads_notes_store__';
-  const g = globalThis as unknown as Record<string, unknown>;
-  if (!g[globalKey]) {
-    const m = new Map<string, LeadNote>();
-    // Seed with one example note to make the endpoint immediately useful.
-    const now = new Date().toISOString();
-    m.set('seed_1', {
-      id: 'seed_1',
-      leadId: 'demo-lead',
-      authorId: 'system',
-      body: 'Lead demonstrativo importado via scraping.',
-      tags: ['demo', 'scraping'],
-      pinned: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-    g[globalKey] = m;
+const store: Map<string, LeadNote[]> =
+  globalThis.__pubLeadsNotesStore ?? new Map<string, LeadNote[]>();
+if (!globalThis.__pubLeadsNotesStore) {
+  globalThis.__pubLeadsNotesStore = store;
+}
+
+const noteSchema = z.object({
+  leadId: z.string().min(1, 'leadId obrigatório'),
+  authorId: z.string().min(1, 'authorId obrigatório'),
+  content: z.string().min(1, 'conteúdo vazio não é permitido').max(5000),
+});
+
+const updateSchema = z.object({
+  content: z.string().min(1).max(5000),
+});
+
+function getUserIdFromRequest(req: NextRequest): string | null {
+  // Placeholder: em produção extrair de sessão/JWT. Aqui aceitamos header.
+  return req.headers.get('x-user-id');
+}
+
+function ensureList(leadId: string): LeadNote[] {
+  let list = store.get(leadId);
+  if (!list) {
+    list = [];
+    store.set(leadId, list);
   }
-  return g[globalKey] as Map<string, LeadNote>;
-})();
+  return list;
+}
 
-// ---------- Validation Schemas ----------
-const createNoteSchema = z.object({
-  leadId: z.string().min(1, 'leadId is required').max(128),
-  authorId: z.string().min(1, 'authorId is required').max(128),
-  body: z.string().min(1, 'body cannot be empty').max(4000),
-  tags: z.array(z.string().min(1).max(32)).max(20).optional().default([]),
-  pinned: z.boolean().optional().default(false),
-});
-
-const listQuerySchema = z.object({
-  leadId: z.string().min(1).optional(),
-  authorId: z.string().min(1).optional(),
-  tag: z.string().min(1).optional(),
-  pinned: z
-    .union([z.literal('true'), z.literal('false')])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === 'true')),
-  page: z
-    .string()
-    .regex(/^\d+$/)
-    .optional()
-    .default('1')
-    .transform((v) => Math.max(1, parseInt(v, 10))),
-  pageSize: z
-    .string()
-    .regex(/^\d+$/)
-    .optional()
-    .default('20')
-    .transform((v) => Math.min(100, Math.max(1, parseInt(v, 10)))),
-});
-
-// ---------- Helpers ----------
-function generateId(): string {
-  // Lightweight RFC4122-ish identifier without external deps.
+function genId(): string {
+  // Compatível com ambiente edge.
   return (
     Date.now().toString(36) +
-    '-' +
-    Math.random().toString(36).slice(2, 10) +
-    '-' +
     Math.random().toString(36).slice(2, 10)
   );
 }
 
-function paginate<T>(items: T[], page: number, pageSize: number) {
-  const total = items.length;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const start = (page - 1) * pageSize;
-  const end = start + pageSize;
-  return {
-    data: items.slice(start, end),
-    pagination: {
-      page,
-      pageSize,
-      total,
-      totalPages,
-      hasNext: page < totalPages,
-      hasPrev: page > 1,
-    },
-  };
-}
-
-function jsonError(message: string, status: number, details?: unknown) {
-  return NextResponse.json(
-    { ok: false, error: message, details },
-    { status }
-  );
-}
-
-function jsonOk<T>(data: T, status = 200, extra?: Record<string, unknown>) {
-  return NextResponse.json(
-    { ok: true, data, ...(extra ?? {}) },
-    { status }
-  );
-}
-
-// ---------- Handlers ----------
+/**
+ * GET /api/lead-notes?leadId=xxx
+ * Lista todas as notas de um lead em ordem cronológica decrescente.
+ */
 export async function GET(req: NextRequest) {
-  try {
-    const url = new URL(req.url);
-    const parsed = listQuerySchema.safeParse(Object.fromEntries(url.searchParams));
+  const { searchParams } = new URL(req.url);
+  const leadId = searchParams.get('leadId');
 
-    if (!parsed.success) {
-      return jsonError('Invalid query parameters', 400, parsed.error.flatten());
-    }
-
-    const { leadId, authorId, tag, pinned, page, pageSize } = parsed.data;
-
-    let notes = Array.from(store.values());
-
-    if (leadId) notes = notes.filter((n) => n.leadId === leadId);
-    if (authorId) notes = notes.filter((n) => n.authorId === authorId);
-    if (typeof pinned === 'boolean') notes = notes.filter((n) => n.pinned === pinned);
-    if (tag) notes = notes.filter((n) => n.tags.includes(tag));
-
-    // Pinned first, then most recent.
-    notes.sort((a, b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      return b.createdAt.localeCompare(a.createdAt);
-    });
-
-    const result = paginate(notes, page, pageSize);
-    return jsonOk(result.data, 200, { pagination: result.pagination });
-  } catch (err) {
-    return jsonError(
-      'Internal error while listing notes',
-      500,
-      err instanceof Error ? { message: err.message } : undefined
+  if (!leadId) {
+    return NextResponse.json(
+      { error: 'Parâmetro "leadId" é obrigatório.' },
+      { status: 400 },
     );
   }
+
+  const notes = ensureList(leadId)
+    .slice()
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  return NextResponse.json({ leadId, count: notes.length, notes });
 }
 
+/**
+ * POST /api/lead-notes
+ * Body: { leadId, authorId, content }
+ */
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body !== 'object') {
-      return jsonError('Request body must be a JSON object', 400);
-    }
-
-    const parsed = createNoteSchema.safeParse(body);
-    if (!parsed.success) {
-      return jsonError('Invalid note payload', 422, parsed.error.flatten());
-    }
-
-    const { leadId, authorId, body: noteBody, tags, pinned } = parsed.data;
-    const now = new Date().toISOString();
-
-    const note: LeadNote = {
-      id: generateId(),
-      leadId,
-      authorId,
-      body: noteBody.trim(),
-      tags: Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean))),
-      pinned,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    store.set(note.id, note);
-
-    return jsonOk(note, 201);
-  } catch (err) {
-    return jsonError(
-      'Internal error while creating note',
-      500,
-      err instanceof Error ? { message: err.message } : undefined
+  const userId = getUserIdFromRequest(req);
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Header "x-user-id" ausente. Não autorizado.' },
+      { status: 401 },
     );
   }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+  }
+
+  const parsed = noteSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Payload inválido.', issues: parsed.error.issues },
+      { status: 422 },
+    );
+  }
+
+  // Autoridade: o authorId enviado deve bater com o usuário autenticado.
+  if (parsed.data.authorId !== userId) {
+    return NextResponse.json(
+      { error: 'authorId não corresponde ao usuário autenticado.' },
+      { status: 403 },
+    );
+  }
+
+  const now = new Date().toISOString();
+  const note: LeadNote = {
+    id: genId(),
+    leadId: parsed.data.leadId,
+    authorId: parsed.data.authorId,
+    content: parsed.data.content.trim(),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  ensureList(parsed.data.leadId).push(note);
+
+  return NextResponse.json({ note }, { status: 201 });
 }
 
-// ---------- Route Config ----------
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+/**
+ * PATCH /api/lead-notes?id=xxx
+ * Body: { content }
+ */
+export async function PATCH(req: NextRequest) {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Header "x-user-id" ausente. Não autorizado.' },
+      { status: 401 },
+    );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) {
+    return NextResponse.json(
+      { error: 'Parâmetro "id" é obrigatório.' },
+      { status: 400 },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 });
+  }
+
+  const parsed = updateSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Payload inválido.', issues: parsed.error.issues },
+      { status: 422 },
+    );
+  }
+
+  for (const list of store.values()) {
+    const idx = list.findIndex((n) => n.id === id);
+    if (idx >= 0) {
+      const existing = list[idx];
+      if (existing.authorId !== userId) {
+        return NextResponse.json(
+          { error: 'Sem permissão para editar esta nota.' },
+          { status: 403 },
+        );
+      }
+      const updated: LeadNote = {
+        ...existing,
+        content: parsed.data.content.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      list[idx] = updated;
+      return NextResponse.json({ note: updated });
+    }
+  }
+
+  return NextResponse.json(
+    { error: 'Nota não encontrada.' },
+    { status: 404 },
+  );
+}
+
+/**
+ * DELETE /api/lead-notes?id=xxx
+ */
+export async function DELETE(req: NextRequest) {
+  const userId = getUserIdFromRequest(req);
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'Header "x-user-id" ausente. Não autorizado.' },
+      { status: 401 },
+    );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) {
+    return NextResponse.json(
+      { error: 'Parâmetro "id" é obrigatório.' },
+      { status: 400 },
+    );
+  }
+
+  for (const list of store.values()) {
+    const idx = list.findIndex((n) => n.id === id);
+    if (idx >= 0) {
+      const existing = list[idx];
+      if (existing.authorId !== userId) {
+        return NextResponse.json(
+          { error: 'Sem permissão para remover esta nota.' },
+          { status: 403 },
+        );
+      }
+      list.splice(idx, 1);
+      return NextResponse.json({ ok: true, id });
+    }
+  }
+
+  return NextResponse.json(
+    { error: 'Nota não encontrada.' },
+    { status: 404 },
+  );
+}
