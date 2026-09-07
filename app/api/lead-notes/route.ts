@@ -2,196 +2,215 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
-
 const NoteSchema = z.object({
-  lead_id: z.string().uuid(),
-  content: z.string().min(1).max(5000),
-  tags: z.array(z.string()).optional().default([]),
-  is_pinned: z.boolean().optional().default(false),
-});
-
-const UpdateSchema = z.object({
-  content: z.string().min(1).max(5000).optional(),
-  tags: z.array(z.string()).optional(),
-  is_pinned: z.boolean().optional(),
+  leadId: z.string().uuid('leadId deve ser um UUID válido'),
+  content: z.string().min(1, 'conteúdo obrigatório').max(5000),
+  type: z.enum(['observation', 'call', 'email', 'meeting', 'status_change']).default('observation'),
+  metadata: z.record(z.any()).optional(),
 });
 
 const QuerySchema = z.object({
-  lead_id: z.string().uuid().optional(),
-  tag: z.string().optional(),
-  search: z.string().optional(),
-  pinned_only: z.coerce.boolean().optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
-  offset: z.coerce.number().int().min(0).optional().default(0),
+  leadId: z.string().uuid().optional(),
+  type: z.enum(['observation', 'call', 'email', 'meeting', 'status_change']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
 });
-
-async function getUserId(req: NextRequest): Promise<string | null> {
-  const auth = req.headers.get('authorization');
-  if (!auth) return null;
-  const token = auth.replace('Bearer ', '');
-  const { data } = await supabase.auth.getUser(token);
-  return data?.user?.id || null;
-}
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     const { searchParams } = new URL(req.url);
     const parsed = QuerySchema.safeParse(Object.fromEntries(searchParams));
+
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid query', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Parâmetros inválidos', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
-    const { lead_id, tag, search, pinned_only, limit, offset } = parsed.data;
+    const { leadId, type, limit, offset } = parsed.data;
     let query = supabase
       .from('lead_notes')
-      .select('*', { count: 'exact' })
-      .eq('user_id', userId)
-      .order('is_pinned', { ascending: false })
+      .select('*, author:users(id, name, email)', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
-    if (lead_id) query = query.eq('lead_id', lead_id);
-    if (pinned_only) query = query.eq('is_pinned', true);
-    if (tag) query = query.contains('tags', [tag]);
-    if (search) query = query.ilike('content', `%${search}%`);
+    if (leadId) query = query.eq('lead_id', leadId);
+    if (type) query = query.eq('type', type);
 
-    const { data, count, error } = await query;
+    const { data, error, count } = await query;
+
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ notes: data, total: count, limit, offset });
+    return NextResponse.json({
+      success: true,
+      data,
+      pagination: { total: count, limit, offset },
+    });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erro interno ao listar notas' },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ error: 'Não autenticado' }, { status: 401 });
+    }
+
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !userData.user) {
+      return NextResponse.json({ error: 'Token inválido' }, { status: 401 });
     }
 
     const body = await req.json();
     const parsed = NoteSchema.safeParse(body);
+
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Payload inválido', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
 
-    const { lead_id, content, tags, is_pinned } = parsed.data;
+    const { leadId, content, type, metadata } = parsed.data;
 
-    const { data: lead } = await supabase
+    const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id')
-      .eq('id', lead_id)
-      .eq('user_id', userId)
+      .select('id, status')
+      .eq('id', leadId)
       .single();
 
-    if (!lead) {
-      return NextResponse.json({ error: 'Lead not found or access denied' }, { status: 404 });
+    if (leadError || !lead) {
+      return NextResponse.json({ error: 'Lead não encontrado' }, { status: 404 });
     }
 
-    const { data, error } = await supabase
+    const { data: note, error } = await supabase
       .from('lead_notes')
       .insert({
-        user_id: userId,
-        lead_id,
+        lead_id: leadId,
+        author_id: userData.user.id,
         content,
-        tags,
-        is_pinned,
+        type,
+        metadata: metadata || {},
       })
-      .select()
+      .select('*, author:users(id, name, email)')
       .single();
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ note: data }, { status: 201 });
+    if (type === 'status_change' && metadata?.newStatus) {
+      await supabase
+        .from('leads')
+        .update({ status: metadata.newStatus, updated_at: new Date().toISOString() })
+        .eq('id', leadId);
+    }
+
+    return NextResponse.json({ success: true, data: note }, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erro interno ao criar nota' },
+      { status: 500 }
+    );
   }
 }
 
 export async function PATCH(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    if (!id) {
-      return NextResponse.json({ error: 'Note id is required' }, { status: 400 });
+    const noteId = searchParams.get('id');
+    if (!noteId) {
+      return NextResponse.json({ error: 'id da nota é obrigatório' }, { status: 400 });
     }
 
+    const UpdateSchema = NoteSchema.partial();
     const body = await req.json();
     const parsed = UpdateSchema.safeParse(body);
+
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Payload inválido', details: parsed.error.flatten() },
+        { status: 400 }
+      );
     }
+
+    const updates: Record<string, any> = {};
+    if (parsed.data.content) updates.content = parsed.data.content;
+    if (parsed.data.type) updates.type = parsed.data.type;
+    if (parsed.data.metadata) updates.metadata = parsed.data.metadata;
+    updates.updated_at = new Date().toISOString();
 
     const { data, error } = await supabase
       .from('lead_notes')
-      .update(parsed.data)
-      .eq('id', id)
-      .eq('user_id', userId)
+      .update(updates)
+      .eq('id', noteId)
       .select()
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ note: data });
+    return NextResponse.json({ success: true, data });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erro interno ao atualizar nota' },
+      { status: 500 }
+    );
   }
 }
 
 export async function DELETE(req: NextRequest) {
   try {
-    const userId = await getUserId(req);
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
     const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    if (!id) {
-      return NextResponse.json({ error: 'Note id is required' }, { status: 400 });
+    const noteId = searchParams.get('id');
+    if (!noteId) {
+      return NextResponse.json({ error: 'id da nota é obrigatório' }, { status: 400 });
     }
 
-    const { error, count } = await supabase
+    const { error } = await supabase
       .from('lead_notes')
-      .delete({ count: 'exact' })
-      .eq('id', id)
-      .eq('user_id', userId);
+      .delete()
+      .eq('id', noteId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (!count) {
-      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ deleted: true, id });
+    return NextResponse.json({ success: true });
   } catch (err) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Erro interno ao deletar nota' },
+      { status: 500 }
+    );
   }
 }
