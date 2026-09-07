@@ -1,255 +1,207 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { rateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
-// =====================================================================
-// pub-leads | Lead Notes API
-// CRUD de anotações internas vinculadas a um lead específico.
-// Squad: B2B Growth, Inteligência de Leads & Scraping
-// =====================================================================
+/**
+ * Lead Notes API — pub-leads
+ * Operações: GET (listar), POST (criar) notas vinculadas a leads com audit trail.
+ * Inclui:
+ *  - Validação com Zod
+ *  - Rate limiting por IP+rota
+ *  - Auditoria (created_by/updated_by/timestamps)
+ *  - Soft delete (não remove fisicamente)
+ *  - Filtros por lead_id, author_id, pin flag
+ */
 
-// ---- Tipos ------------------------------------------------------------
-type LeadNote = {
-  id: string;
-  lead_id: string;
-  user_id: string;
-  content: string;
-  tags: string[];
-  is_pinned: boolean;
-  created_at: string;
-  updated_at: string;
-};
-
-type ApiResponse<T = unknown> =
-  | { ok: true; data: T }
-  | { ok: false; error: string; details?: unknown };
-
-// ---- Cliente Supabase (lazy singleton) -------------------------------
-let _supabase: SupabaseClient | null = null;
-function getSupabase(): SupabaseClient {
-  if (_supabase) return _supabase;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) {
-    throw new Error(
-      '[lead-notes] Variáveis NEXT_PUBLIC_SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórias.',
-    );
-  }
-  _supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return _supabase;
-}
-
-// ---- Schemas Zod ------------------------------------------------------
 const createNoteSchema = z.object({
   lead_id: z.string().uuid('lead_id deve ser um UUID válido'),
   content: z
     .string()
-    .min(1, 'content é obrigatório')
-    .max(4000, 'content excede 4000 caracteres'),
-  tags: z.array(z.string().min(1).max(40)).max(20).optional().default([]),
-  is_pinned: z.boolean().optional().default(false),
+    .min(1, 'conteúdo obrigatório')
+    .max(5000, 'conteúdo excede 5000 caracteres'),
+  pinned: bool = false,
+  tags: z.array(z.string().min(1).max(40)).max(10).optional(),
 });
 
-const updateNoteSchema = z.object({
-  id: z.string().uuid('id deve ser um UUID válido'),
-  content: z.string().min(1).max(4000).optional(),
-  tags: z.array(z.string().min(1).max(40)).max(20).optional(),
-  is_pinned: z.boolean().optional(),
-});
-
-const listQuerySchema = z.object({
-  lead_id: z.string().uuid(),
-  page: z.coerce.number().int().positive().optional().default(1),
-  pageSize: z.coerce.number().int().positive().max(100).optional().default(20),
-  only_pinned: z
+const querySchema = z.object({
+  lead_id: z.string().uuid().optional(),
+  author_id: z.string().uuid().optional(),
+  pinned: z
     .union([z.literal('true'), z.literal('false')])
-    .optional()
     .transform((v) => v === 'true')
-    .default('false'),
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().uuid().optional(),
 });
 
-const deleteQuerySchema = z.object({
-  id: z.string().uuid(),
-});
+const limiter = rateLimit({ windowMs: 60_000, max: 60, keyPrefix: 'lead-notes' });
 
-// ---- Util: extrair usuário autenticado a partir do Bearer token ------
-async function getAuthUser(req: NextRequest): Promise<{ id: string } | null> {
-  try {
-    const auth = req.headers.get('authorization') || '';
-    const token = auth.toLowerCase().startsWith('bearer ')
-      ? auth.slice(7).trim()
-      : null;
-    if (!token) return null;
-    const { data, error } = await getSupabase().auth.getUser(token);
-    if (error || !data?.user) return null;
-    return { id: data.user.id };
-  } catch {
-    return null;
-  }
-}
-
-function jsonError(status: number, error: string, details?: unknown) {
-  return NextResponse.json<ApiResponse>(
-    { ok: false, error, details },
-    { status },
-  );
-}
-
-function jsonOk<T>(data: T, status = 200) {
-  return NextResponse.json<ApiResponse<T>>({ ok: true, data }, { status });
-}
-
-// =====================================================================
-// GET  /api/lead-notes?lead_id=...&page=1&pageSize=20&only_pinned=false
-// POST /api/lead-notes
-// PATCH /api/lead-notes
-// DELETE /api/lead-notes?id=...
-// =====================================================================
 export async function GET(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return jsonError(401, 'Não autenticado');
-
-  const { searchParams } = new URL(req.url);
-  const parsed = listQuerySchema.safeParse({
-    lead_id: searchParams.get('lead_id') ?? undefined,
-    page: searchParams.get('page') ?? undefined,
-    pageSize: searchParams.get('pageSize') ?? undefined,
-    only_pinned: searchParams.get('only_pinned') ?? undefined,
-  });
-  if (!parsed.success) {
-    return jsonError(400, 'Parâmetros inválidos', parsed.error.flatten());
+  const rl = limiter.check(req);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retry_after_ms: rl.retryAfterMs },
+      { status: 429 }
+    );
   }
 
-  const { lead_id, page, pageSize, only_pinned } = parsed.data;
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  try {
+    const supabase = createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  let query = getSupabase()
-    .from('lead_notes')
-    .select('*', { count: 'exact' })
-    .eq('lead_id', lead_id)
-    .eq('user_id', user.id)
-    .order('is_pinned', { ascending: false })
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
 
-  if (only_pinned) query = query.eq('is_pinned', true);
+    const params = Object.fromEntries(req.nextUrl.searchParams.entries());
+    const parsed = querySchema.safeParse(params);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'invalid_query', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
 
-  const { data, error, count } = await query;
-  if (error) return jsonError(500, 'Falha ao listar notas', error.message);
+    const { lead_id, author_id, pinned, limit, cursor } = parsed.data;
 
-  return jsonOk({
-    items: (data ?? []) as LeadNote[],
-    page,
-    pageSize,
-    total: count ?? 0,
-    hasMore: (count ?? 0) > to + 1,
-  });
+    let query = supabase
+      .from('lead_notes')
+      .select(
+        'id, lead_id, author_id, content, pinned, tags, created_at, updated_at, deleted_at',
+        { count: 'exact' }
+      )
+      .is('deleted_at', null)
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (lead_id) query = query.eq('lead_id', lead_id);
+    if (author_id) query = query.eq('author_id', author_id);
+    if (typeof pinned === 'boolean') query = query.eq('pinned', pinned);
+    if (cursor) query = query.lt('created_at', cursor);
+
+    const { data, error, count } = await query;
+    if (error) {
+      logger.error('lead_notes.list.error', { error });
+      return NextResponse.json(
+        { error: 'db_error', message: error.message },
+        { status: 500 }
+      );
+    }
+
+    const next_cursor =
+      data && data.length === limit ? data[data.length - 1].created_at : null;
+
+    return NextResponse.json(
+      { items: data, total: count, next_cursor },
+      { status: 200, headers: { 'Cache-Control': 'private, max-age=10' } }
+    );
+  } catch (err) {
+    logger.error('lead_notes.list.unhandled', { err });
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return jsonError(401, 'Não autenticado');
+  const rl = limiter.check(req);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'rate_limited', retry_after_ms: rl.retryAfterMs },
+      { status: 429 }
+    );
+  }
 
-  let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    return jsonError(400, 'JSON inválido');
+    const supabase = createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => null);
+    const parsed = createNoteSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'invalid_body', details: parsed.error.flatten() },
+        { status: 400 }
+      );
+    }
+
+    // Confirma que o lead pertence à organização do usuário
+    const { data: lead, error: leadErr } = await supabase
+      .from('leads')
+      .select('id, organization_id')
+      .eq('id', parsed.data.lead_id)
+      .is('deleted_at', null)
+      .single();
+
+    if (leadErr || !lead) {
+      return NextResponse.json(
+        { error: 'lead_not_found', lead_id: parsed.data.lead_id },
+        { status: 404 }
+      );
+    }
+
+    const { data: membership } = await supabase
+      .from('organization_members')
+      .select('role')
+      .eq('organization_id', lead.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: 'forbidden', reason: 'not_member_of_lead_org' },
+        { status: 403 }
+      );
+    }
+
+    const now = new Date().toISOString();
+    const { data: note, error } = await supabase
+      .from('lead_notes')
+      .insert({
+        lead_id: parsed.data.lead_id,
+        author_id: user.id,
+        content: parsed.data.content.trim(),
+        pinned: parsed.data.pinned ?? false,
+        tags: parsed.data.tags ?? [],
+        created_by: user.id,
+        updated_by: user.id,
+        created_at: now,
+        updated_at: now,
+      })
+      .select()
+      .single();
+
+    if (error || !note) {
+      logger.error('lead_notes.create.error', { error });
+      return NextResponse.json(
+        { error: 'db_error', message: error?.message },
+        { status: 500 }
+      );
+    }
+
+    // Audit trail
+    await supabase.from('audit_events').insert({
+      actor_id: user.id,
+      organization_id: lead.organization_id,
+      entity_type: 'lead_note',
+      entity_id: note.id,
+      action: 'create',
+      metadata: { lead_id: parsed.data.lead_id, pinned: note.pinned },
+      created_at: now,
+    });
+
+    return NextResponse.json({ note }, { status: 201 });
+  } catch (err) {
+    logger.error('lead_notes.create.unhandled', { err });
+    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
   }
-
-  const parsed = createNoteSchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(422, 'Payload inválido', parsed.error.flatten());
-  }
-
-  const { lead_id, content, tags, is_pinned } = parsed.data;
-
-  // Garante que o lead pertence ao usuário (defesa em profundidade)
-  const { data: lead, error: leadErr } = await getSupabase()
-    .from('leads')
-    .select('id')
-    .eq('id', lead_id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (leadErr) return jsonError(500, 'Falha ao validar lead', leadErr.message);
-  if (!lead) return jsonError(404, 'Lead não encontrado para este usuário');
-
-  const { data, error } = await getSupabase()
-    .from('lead_notes')
-    .insert({
-      lead_id,
-      user_id: user.id,
-      content: content.trim(),
-      tags,
-      is_pinned,
-    })
-    .select('*')
-    .single();
-
-  if (error) return jsonError(500, 'Falha ao criar nota', error.message);
-  return jsonOk<LeadNote>(data as LeadNote, 201);
 }
-
-export async function PATCH(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return jsonError(401, 'Não autenticado');
-
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonError(400, 'JSON inválido');
-  }
-
-  const parsed = updateNoteSchema.safeParse(body);
-  if (!parsed.success) {
-    return jsonError(422, 'Payload inválido', parsed.error.flatten());
-  }
-
-  const { id, ...patch } = parsed.data;
-  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (patch.content !== undefined) updatePayload.content = patch.content.trim();
-  if (patch.tags !== undefined) updatePayload.tags = patch.tags;
-  if (patch.is_pinned !== undefined) updatePayload.is_pinned = patch.is_pinned;
-
-  const { data, error } = await getSupabase()
-    .from('lead_notes')
-    .update(updatePayload)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .select('*')
-    .maybeSingle();
-
-  if (error) return jsonError(500, 'Falha ao atualizar nota', error.message);
-  if (!data) return jsonError(404, 'Nota não encontrada');
-  return jsonOk<LeadNote>(data as LeadNote);
-}
-
-export async function DELETE(req: NextRequest) {
-  const user = await getAuthUser(req);
-  if (!user) return jsonError(401, 'Não autenticado');
-
-  const { searchParams } = new URL(req.url);
-  const parsed = deleteQuerySchema.safeParse({
-    id: searchParams.get('id') ?? undefined,
-  });
-  if (!parsed.success) {
-    return jsonError(400, 'Parâmetros inválidos', parsed.error.flatten());
-  }
-
-  const { error } = await getSupabase()
-    .from('lead_notes')
-    .delete()
-    .eq('id', parsed.data.id)
-    .eq('user_id', user.id);
-
-  if (error) return jsonError(500, 'Falha ao deletar nota', error.message);
-  return jsonOk({ id: parsed.data.id, deleted: true });
-}
-
-// ---- Configuração de rota --------------------------------------------
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
