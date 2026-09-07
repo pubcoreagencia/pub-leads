@@ -1,207 +1,238 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { rateLimit } from '@/lib/rate-limit';
-import { logger } from '@/lib/logger';
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { rateLimit } from "@/lib/rate-limit";
 
-/**
- * Lead Notes API — pub-leads
- * Operações: GET (listar), POST (criar) notas vinculadas a leads com audit trail.
- * Inclui:
- *  - Validação com Zod
- *  - Rate limiting por IP+rota
- *  - Auditoria (created_by/updated_by/timestamps)
- *  - Soft delete (não remove fisicamente)
- *  - Filtros por lead_id, author_id, pin flag
- */
+// ============================================================================
+// Validation Schemas (Zod)
+// ============================================================================
 
 const createNoteSchema = z.object({
-  lead_id: z.string().uuid('lead_id deve ser um UUID válido'),
+  leadId: z.string().cuid("leadId inválido"),
   content: z
     .string()
-    .min(1, 'conteúdo obrigatório')
-    .max(5000, 'conteúdo excede 5000 caracteres'),
-  pinned: bool = false,
-  tags: z.array(z.string().min(1).max(40)).max(10).optional(),
+    .min(1, "Conteúdo não pode ser vazio")
+    .max(5000, "Conteúdo excede 5000 caracteres")
+    .transform((v) => v.trim()),
+  type: z
+    .enum(["GENERAL", "CALL", "MEETING", "FOLLOW_UP", "IMPORTANT", "NEGOTIATION"])
+    .default("GENERAL"),
+  pinned: z.boolean().optional().default(false),
+  reminderAt: z
+    .string()
+    .datetime()
+    .optional()
+    .nullable()
+    .transform((v) => (v ? new Date(v) : null)),
+});
+
+const updateNoteSchema = z.object({
+  content: z
+    .string()
+    .min(1, "Conteúdo não pode ser vazio")
+    .max(5000)
+    .transform((v) => v.trim())
+    .optional(),
+  type: z
+    .enum(["GENERAL", "CALL", "MEETING", "FOLLOW_UP", "IMPORTANT", "NEGOTIATION"])
+    .optional(),
+  pinned: z.boolean().optional(),
+  reminderAt: z
+    .string()
+    .datetime()
+    .optional()
+    .nullable()
+    .transform((v) => (v ? new Date(v) : null)),
 });
 
 const querySchema = z.object({
-  lead_id: z.string().uuid().optional(),
-  author_id: z.string().uuid().optional(),
-  pinned: z
-    .union([z.literal('true'), z.literal('false')])
-    .transform((v) => v === 'true')
+  leadId: z.string().cuid().optional(),
+  type: z
+    .enum(["GENERAL", "CALL", "MEETING", "FOLLOW_UP", "IMPORTANT", "NEGOTIATION"])
     .optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  cursor: z.string().uuid().optional(),
+  pinned: z
+    .string()
+    .transform((v) => v === "true")
+    .optional(),
+  page: z
+    .string()
+    .default("1")
+    .transform((v) => parseInt(v, 10))
+    .refine((n) => !isNaN(n) && n > 0, "page inválida"),
+  pageSize: z
+    .string()
+    .default("20")
+    .transform((v) => parseInt(v, 10))
+    .refine((n) => !isNaN(n) && n > 0 && n <= 100, "pageSize inválida (1-100)"),
+  search: z.string().max(200).optional(),
 });
 
-const limiter = rateLimit({ windowMs: 60_000, max: 60, keyPrefix: 'lead-notes' });
+// ============================================================================
+// Helpers
+// ============================================================================
 
+async function ensureLeadOwnership(leadId: string, userId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, userId },
+    select: { id: true, name: true },
+  });
+  return lead;
+}
+
+async function ensureNoteOwnership(noteId: string, userId: string) {
+  return prisma.leadNote.findFirst({
+    where: { id: noteId, userId },
+  });
+}
+
+// ============================================================================
+// GET /api/lead-notes - List notes (paginated, filtered)
+// ============================================================================
 export async function GET(req: NextRequest) {
-  const rl = limiter.check(req);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'rate_limited', retry_after_ms: rl.retryAfterMs },
-      { status: 429 }
-    );
-  }
-
   try {
-    const supabase = createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
-    const params = Object.fromEntries(req.nextUrl.searchParams.entries());
-    const parsed = querySchema.safeParse(params);
+    const limiter = rateLimit({
+      key: `lead-notes:list:${session.user.id}`,
+      limit: 60,
+      windowMs: 60_000,
+    });
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: "Limite de requisições excedido" },
+        { status: 429 }
+      );
+    }
+
+    const url = new URL(req.url);
+    const parsed = querySchema.safeParse(Object.fromEntries(url.searchParams));
+
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'invalid_query', details: parsed.error.flatten() },
+        { error: "Parâmetros inválidos", issues: parsed.error.issues },
         { status: 400 }
       );
     }
 
-    const { lead_id, author_id, pinned, limit, cursor } = parsed.data;
+    const { leadId, type, pinned, page, pageSize, search } = parsed.data;
 
-    let query = supabase
-      .from('lead_notes')
-      .select(
-        'id, lead_id, author_id, content, pinned, tags, created_at, updated_at, deleted_at',
-        { count: 'exact' }
-      )
-      .is('deleted_at', null)
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (lead_id) query = query.eq('lead_id', lead_id);
-    if (author_id) query = query.eq('author_id', author_id);
-    if (typeof pinned === 'boolean') query = query.eq('pinned', pinned);
-    if (cursor) query = query.lt('created_at', cursor);
-
-    const { data, error, count } = await query;
-    if (error) {
-      logger.error('lead_notes.list.error', { error });
-      return NextResponse.json(
-        { error: 'db_error', message: error.message },
-        { status: 500 }
-      );
+    if (leadId) {
+      const lead = await ensureLeadOwnership(leadId, session.user.id);
+      if (!lead) {
+        return NextResponse.json(
+          { error: "Lead não encontrado ou sem permissão" },
+          { status: 404 }
+        );
+      }
     }
 
-    const next_cursor =
-      data && data.length === limit ? data[data.length - 1].created_at : null;
+    const where: any = { userId: session.user.id };
+    if (leadId) where.leadId = leadId;
+    if (type) where.type = type;
+    if (typeof pinned === "boolean") where.pinned = pinned;
+    if (search) {
+      where.content = { contains: search, mode: "insensitive" };
+    }
 
-    return NextResponse.json(
-      { items: data, total: count, next_cursor },
-      { status: 200, headers: { 'Cache-Control': 'private, max-age=10' } }
-    );
+    const [items, total] = await Promise.all([
+      prisma.leadNote.findMany({
+        where,
+        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          lead: {
+            select: { id: true, name: true, email: true, company: true },
+          },
+        },
+      }),
+      prisma.leadNote.count({ where }),
+    ]);
+
+    return NextResponse.json({
+      data: items,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+        hasNext: page * pageSize < total,
+      },
+    });
   } catch (err) {
-    logger.error('lead_notes.list.unhandled', { err });
-    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
+    console.error("[GET /api/lead-notes]", err);
+    return NextResponse.json(
+      { error: "Erro interno ao listar notas" },
+      { status: 500 }
+    );
   }
 }
 
+// ============================================================================
+// POST /api/lead-notes - Create note
+// ============================================================================
 export async function POST(req: NextRequest) {
-  const rl = limiter.check(req);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'rate_limited', retry_after_ms: rl.retryAfterMs },
-      { status: 429 }
-    );
-  }
-
   try {
-    const supabase = createServerSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
 
-    if (!user) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    const limiter = rateLimit({
+      key: `lead-notes:create:${session.user.id}`,
+      limit: 30,
+      windowMs: 60_000,
+    });
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: "Limite de criação excedido" },
+        { status: 429 }
+      );
     }
 
     const body = await req.json().catch(() => null);
     const parsed = createNoteSchema.safeParse(body);
+
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'invalid_body', details: parsed.error.flatten() },
+        { error: "Dados inválidos", issues: parsed.error.issues },
         { status: 400 }
       );
     }
 
-    // Confirma que o lead pertence à organização do usuário
-    const { data: lead, error: leadErr } = await supabase
-      .from('leads')
-      .select('id, organization_id')
-      .eq('id', parsed.data.lead_id)
-      .is('deleted_at', null)
-      .single();
-
-    if (leadErr || !lead) {
+    const lead = await ensureLeadOwnership(parsed.data.leadId, session.user.id);
+    if (!lead) {
       return NextResponse.json(
-        { error: 'lead_not_found', lead_id: parsed.data.lead_id },
+        { error: "Lead não encontrado ou sem permissão" },
         { status: 404 }
       );
     }
 
-    const { data: membership } = await supabase
-      .from('organization_members')
-      .select('role')
-      .eq('organization_id', lead.organization_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: 'forbidden', reason: 'not_member_of_lead_org' },
-        { status: 403 }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const { data: note, error } = await supabase
-      .from('lead_notes')
-      .insert({
-        lead_id: parsed.data.lead_id,
-        author_id: user.id,
-        content: parsed.data.content.trim(),
-        pinned: parsed.data.pinned ?? false,
-        tags: parsed.data.tags ?? [],
-        created_by: user.id,
-        updated_by: user.id,
-        created_at: now,
-        updated_at: now,
-      })
-      .select()
-      .single();
-
-    if (error || !note) {
-      logger.error('lead_notes.create.error', { error });
-      return NextResponse.json(
-        { error: 'db_error', message: error?.message },
-        { status: 500 }
-      );
-    }
-
-    // Audit trail
-    await supabase.from('audit_events').insert({
-      actor_id: user.id,
-      organization_id: lead.organization_id,
-      entity_type: 'lead_note',
-      entity_id: note.id,
-      action: 'create',
-      metadata: { lead_id: parsed.data.lead_id, pinned: note.pinned },
-      created_at: now,
+    const note = await prisma.leadNote.create({
+      data: {
+        userId: session.user.id,
+        leadId: parsed.data.leadId,
+        content: parsed.data.content,
+        type: parsed.data.type,
+        pinned: parsed.data.pinned,
+        reminderAt: parsed.data.reminderAt,
+      },
+      include: {
+        lead: { select: { id: true, name: true, email: true, company: true } },
+      },
     });
 
-    return NextResponse.json({ note }, { status: 201 });
+    return NextResponse.json({ data: note }, { status: 201 });
   } catch (err) {
-    logger.error('lead_notes.create.unhandled', { err });
-    return NextResponse.json({ error: 'internal_error' }, { status: 500 });
+    console.error("[POST /api/lead-notes]", err);
+    return NextResponse.json(
+      { error: "Erro interno ao criar nota" },
+      { status: 500 }
+    );
   }
 }
